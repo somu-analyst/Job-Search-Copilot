@@ -41,7 +41,8 @@ m1.metric("Jobs found", c["jobs"])
 m2.metric("Unreviewed", c["new"])
 m3.metric("Companies", c["companies"])
 
-tab_jobs, tab_co, tab_sum = st.tabs(["📋 Jobs", "🏢 Companies", "📊 Summary"])
+tab_jobs, tab_co, tab_h1b, tab_sum = st.tabs(
+    ["📋 Jobs", "🏢 Companies", "🎫 H-1B Sponsors", "📊 Summary"])
 
 # ── Jobs tab ────────────────────────────────────────────────────────────────
 with tab_jobs:
@@ -58,7 +59,7 @@ with tab_jobs:
         q += " AND is_core = 1"
     if kw:
         q += " AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ?)"; p += [f"%{kw.lower()}%"]*2
-    q += " ORDER BY is_core DESC, date_found DESC"
+    q += " ORDER BY score DESC, is_core DESC, date_found DESC"
     df = load(q, p)
 
     with left:
@@ -110,6 +111,40 @@ with tab_co:
     )
     st.download_button("⬇ Export companies (CSV)", co.to_csv(index=False),
                        "company-directory.csv", "text/csv")
+
+# ── H-1B Sponsors tab ───────────────────────────────────────────────────────
+with tab_h1b:
+    from src import sponsors as sp
+    st.caption("Sponsor-priority view: apply to **strong** sponsors first. "
+               "Seeds come from a curated BFSI map; live counts from public "
+               "H-1B disclosure data (h1bdata.info).")
+    h = load("""SELECT name, sponsors_h1b, job_count, careers_url
+                FROM companies ORDER BY
+                  CASE WHEN sponsors_h1b LIKE 'strong%'   THEN 0
+                       WHEN sponsors_h1b LIKE '%filings%' AND sponsors_h1b NOT LIKE '0 filings%' THEN 1
+                       WHEN sponsors_h1b LIKE 'moderate%' THEN 2
+                       WHEN sponsors_h1b = ''             THEN 3
+                       ELSE 4 END, job_count DESC""")
+    st.dataframe(
+        h, hide_index=True, use_container_width=True, height=480,
+        column_config={
+            "sponsors_h1b": st.column_config.TextColumn("H-1B verdict"),
+            "careers_url": st.column_config.LinkColumn("Careers", display_text="open ↗"),
+        },
+    )
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        if st.button("🔎 Live-lookup top unverified (15)"):
+            with st.spinner("Querying h1bdata.info (rate-limited, ~30s)..."):
+                n = sp.enrich_live(conn, limit=15, verbose=False)
+            st.success(f"Updated {n} companies.")
+            st.rerun()
+    with c2:
+        one = st.text_input("Or check one company", placeholder="e.g. Fannie Mae")
+        if one:
+            cnt = sp.lookup_h1b(one)
+            st.write(f"**{one}**: {cnt if cnt is not None else 'lookup failed'} H-1B filings"
+                     if cnt is not None else "Lookup failed — try again.")
 
 # ── Summary tab ─────────────────────────────────────────────────────────────
 with tab_sum:
