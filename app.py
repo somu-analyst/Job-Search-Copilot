@@ -13,6 +13,7 @@ Reads/writes data/jobs.db. No API key, fully local.
 import sqlite3
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src import db
 
@@ -84,8 +85,9 @@ with st.sidebar:
     st.divider()
     st.caption(f"DB: `{db.DB_PATH.name}` · statuses: {', '.join(db.STATUSES)}")
 
-tab_jobs, tab_applied, tab_co, tab_h1b, tab_sum = st.tabs(
-    ["📋 Jobs", "✅ Applied", "🏢 Companies", "🎫 H-1B Sponsors", "📊 Summary"])
+tab_jobs, tab_applied, tab_resume, tab_co, tab_h1b, tab_sum = st.tabs(
+    ["📋 Jobs", "✅ Applied", "📄 Resume & Apply", "🏢 Companies",
+     "🎫 H-1B Sponsors", "📊 Summary"])
 
 # ── Jobs tab ────────────────────────────────────────────────────────────────
 from src.score import MUST_APPLY_AT
@@ -214,6 +216,57 @@ with tab_applied:
             st.rerun()
         st.download_button("⬇ Export applied (CSV)", dfa.drop(columns=["rowid"]).to_csv(index=False),
                            "applied-jobs.csv", "text/csv")
+
+# ── Resume & Apply tab ──────────────────────────────────────────────────────
+with tab_resume:
+    from src import resume as rz
+    st.caption("Pick a job → get a tailored resume (HTML → print to PDF), a merged "
+               "cover letter, and copy-paste blocks for the application form. "
+               "All token-free; optional AI tailoring via career-ops queue.")
+
+    jobs_pick = load("""SELECT url, title, company, score FROM jobs
+                        WHERE status NOT IN ('skip','stale','rejected')
+                        ORDER BY score DESC, date_found DESC LIMIT 300""")
+    if jobs_pick.empty:
+        st.info("No jobs available — run a scan first.")
+    else:
+        labels = [f"{r.score:.1f}/10 — {r.title[:70]} @ {r.company}"
+                  for r in jobs_pick.itertuples()]
+        idx = st.selectbox("Job to apply for", range(len(labels)),
+                           format_func=lambda i: labels[i])
+        job = jobs_pick.iloc[idx]
+        kws = rz.matched_keywords_for(job["title"])
+        st.link_button("↗ Open job posting", job["url"])
+
+        colL, colR = st.columns(2)
+        with colL:
+            st.subheader("📄 Tailored resume")
+            if kws:
+                st.write("Alignment keywords: " + ", ".join(kws))
+            html_doc = rz.tailored_resume_html(job["title"], job["company"], kws)
+            from src.sources import slugify
+            st.download_button("⬇ Download resume (HTML → Ctrl+P → PDF)",
+                               html_doc, f"resume-{slugify(job['company'])[:30]}.html",
+                               "text/html", use_container_width=True)
+            st.download_button("⬇ Download cover letter (.txt)",
+                               rz.cover_letter(job["title"], job["company"]),
+                               "cover-letter.txt", "text/plain", use_container_width=True)
+            if st.button("🤖 Queue for AI-tailored PDF (career-ops)", use_container_width=True):
+                st.info(rz.queue_for_ai_tailoring(job["url"]))
+            with st.expander("Preview tailored resume"):
+                components.html(html_doc, height=600, scrolling=True)
+        with colR:
+            st.subheader("⚡ Apply kit — copy/paste blocks")
+            for label, text in rz.apply_kit().items():
+                st.caption(label)
+                st.code(text, language=None)
+            st.caption("Mark it applied when done:")
+            if st.button("✅ Mark this job APPLIED (today)", use_container_width=True):
+                conn.execute("UPDATE jobs SET status='applied', date_applied=? WHERE url=?",
+                             (db.today(), job["url"]))
+                conn.commit()
+                st.success("Moved to ✅ Applied with today's date.")
+                st.rerun()
 
 # ── Companies tab ───────────────────────────────────────────────────────────
 with tab_co:
