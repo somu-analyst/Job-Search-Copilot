@@ -41,6 +41,42 @@ m1.metric("Jobs found", c["jobs"])
 m2.metric("Unreviewed", c["new"])
 m3.metric("Companies", c["companies"])
 
+
+def _post_process():
+    from src import score, sponsors
+    score.score_all(conn, verbose=False)
+    sponsors.enrich_seeds(conn)
+    db.archive_stale(conn)
+
+
+# ── Ad-hoc scan (sidebar) ───────────────────────────────────────────────────
+with st.sidebar:
+    st.header("⚡ Run a scan now")
+    st.caption("Same pipeline as the scheduler — scrape → filter → dedupe "
+               "→ score → sponsor-tag. Token-free.")
+    if st.button("🏦 Quick scan — Workday banks (~1 min)", use_container_width=True):
+        from src import scrape_workday
+        with st.status("Scanning bank Workday APIs...", expanded=True) as s:
+            n = scrape_workday.run(conn, verbose=False)
+            st.write(f"Workday: **+{n}** new jobs")
+            _post_process()
+            s.update(label=f"Done — +{n} new jobs", state="complete")
+        st.rerun()
+    if st.button("🌐 Full scan — boards + Workday (~5–10 min)", use_container_width=True):
+        from src import scrape_boards, scrape_workday
+        with st.status("Full scan running — leave this tab open...", expanded=True) as s:
+            st.write("1/2 Job boards (Indeed / LinkedIn / Google)...")
+            nb = scrape_boards.run(conn, verbose=False)
+            st.write(f"Boards: **+{nb}** new jobs")
+            st.write("2/2 Workday bank APIs...")
+            nw = scrape_workday.run(conn, verbose=False)
+            st.write(f"Workday: **+{nw}** new jobs")
+            _post_process()
+            s.update(label=f"Done — +{nb + nw} new jobs", state="complete")
+        st.rerun()
+    st.divider()
+    st.caption(f"DB: `{db.DB_PATH.name}` · statuses: {', '.join(db.STATUSES)}")
+
 tab_jobs, tab_co, tab_h1b, tab_sum = st.tabs(
     ["📋 Jobs", "🏢 Companies", "🎫 H-1B Sponsors", "📊 Summary"])
 
