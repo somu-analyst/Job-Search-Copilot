@@ -42,7 +42,9 @@ filters:
   negative:
     [junior, intern, entry level, ios, android, frontend, front end, php, ruby,
      embedded, firmware, blockchain, web3, salesforce admin, physical security,
-     nurse, recruiter, driver, warehouse, retail store, cashier]
+     nurse, recruiter, driver, warehouse, retail store, cashier,
+     "java ", "java,", javascript, .net, c++, golang, software engineer,
+     software developer, full stack, fullstack, devops, sre]
 
   # Core-fit markers — these titles win when a run hits its cap
   core:

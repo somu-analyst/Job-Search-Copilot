@@ -15,7 +15,9 @@ from pathlib import Path
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "jobs.db"
 
 STATUSES = ["new", "interested", "applied", "responded",
-            "interview", "offer", "rejected", "skip"]
+            "interview", "offer", "rejected", "skip", "stale"]
+
+STALE_DAYS = 21  # unreviewed 'new' jobs older than this are auto-archived
 
 
 def now() -> str:
@@ -109,6 +111,18 @@ def touch_company(conn, name, *, source="", careers_url="", workday_url="",
                VALUES (?,?,?,?,1,?,?,?)""",
             (name, slugify(name), now(), now(), careers_url, workday_url, sponsors_h1b),
         )
+
+
+def archive_stale(conn, days=STALE_DAYS) -> int:
+    """JobFunnel-style hygiene: 'new' jobs never reviewed within N days → stale.
+
+    Keeps the inbox fresh; stale rows stay queryable under the 'stale' filter."""
+    cur = conn.execute(
+        """UPDATE jobs SET status='stale'
+           WHERE status='new' AND date_found <= date('now', ?)""",
+        (f"-{int(days)} days",))
+    conn.commit()
+    return cur.rowcount
 
 
 def counts(conn) -> dict:

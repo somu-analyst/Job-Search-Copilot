@@ -44,6 +44,8 @@ DEFAULT_NEGATIVE = [
     "front end", "php", "ruby", "embedded", "firmware", "blockchain", "web3",
     "salesforce admin", "physical security", "nurse", "recruiter", "driver",
     "warehouse", "retail store", "cashier",
+    "java ", "java,", "javascript", ".net", "c++", "golang", "software engineer",
+    "software developer", "full stack", "fullstack", "devops", "sre",
 ]
 
 # Core-fit markers — win the per-run cap over broad "analytics" roles

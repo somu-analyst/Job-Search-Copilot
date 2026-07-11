@@ -35,7 +35,9 @@ streamlit run app.py     # open the tracker dashboard
                                               Jobs table · Company directory · Funnel
 ```
 
-- **`run.py`** — orchestrator. `--boards` or `--workday` to run one lane.
+- **`run.py`** — orchestrator. `--boards` / `--workday` for one lane; `--sponsors` adds live H-1B filing lookups. Every run also: scores all new jobs ($0 keyword model), applies sponsor seeds, archives stale unreviewed jobs (>21 days).
+- **`src/score.py`** — token-free fit score 0–5 (core-fit keywords + seniority + sponsor bonus). Jobs tab sorts by it.
+- **`src/sponsors.py`** — H-1B intelligence: curated BFSI sponsor map + live filing counts from public DOL disclosure data (h1bdata.info). Own tab in the app.
 - **`src/scrape_boards.py`** — JobSpy multi-site scraper (proxy-ready).
 - **`src/scrape_workday.py`** — Workday JSON feeder. Add banks by appending to
   `TENANTS`; use `python -m src.scrape_workday --probe <host> <tenant>` to find the site slug.
