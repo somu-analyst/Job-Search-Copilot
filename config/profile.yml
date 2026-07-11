@@ -1,0 +1,57 @@
+# bfsi-job-hunter — your search config. Edit freely; no code changes needed.
+
+candidate:
+  name: "Srinivasa Rao Somu"
+  location: "NJ, USA"
+  visa: "H-1B (needs sponsorship — prioritize sponsor-history employers)"
+
+location:
+  search: "United States"      # location string passed to the board scrapers
+
+filters:
+  # Search terms sent to the job boards (one scrape per term per site)
+  queries:
+    - "fraud analytics"
+    - "AML analytics"
+    - "financial crimes analyst"
+    - "credit risk analytics SAS"
+    - "CCAR CECL analyst"
+    - "compliance analytics KYC"
+    - "SAS Viya"
+    - "data governance banking"
+    - "risk reporting analyst bank"
+    - "mortgage default servicing analytics"
+    - "banking analytics consultant"
+    - "financial services data analytics"
+    - "BFSI analytics"
+
+  # A title must contain >=1 positive and 0 negative keywords to be kept
+  positive:
+    [fraud, aml, anti-money, financial crime, bsa, compliance, sanction, kyc,
+     cdd, transaction monitoring, ofac, surveillance, credit risk, risk analy,
+     risk manager, risk report, model risk, model validation, stress test,
+     ccar, cecl, loss forecast, loss mitigation, portfolio risk, portfolio analy,
+     collections, recovery, default, mortgage, servicing, regulatory report,
+     sec report, external report, call center, contact center, quantitative,
+     data analy, analytics, business analyst, business intelligence,
+     decision science, data scientist, sas, reporting, mis, data engineer, etl,
+     consultant, advisory, consulting, data management, data governance,
+     data quality, data steward, master data, metadata, data lineage, insights,
+     data strategy, migration, modernization, remediation]
+
+  negative:
+    [junior, intern, entry level, ios, android, frontend, front end, php, ruby,
+     embedded, firmware, blockchain, web3, salesforce admin, physical security,
+     nurse, recruiter, driver, warehouse, retail store, cashier]
+
+  # Core-fit markers — these titles win when a run hits its cap
+  core:
+    [fraud, aml, financial crime, credit risk, ccar, cecl, compliance, sas,
+     bsa, kyc, risk analy, stress test]
+
+scrape:
+  board_sites: [indeed, linkedin, google]   # ziprecruiter/glassdoor block scrapers
+  # Optional: add proxies to re-enable blocked sites & dodge LinkedIn rate limits.
+  # JobSpy round-robins these. Format: "user:pass@host:port" or "host:port".
+  # proxies:
+  #   - "user:pass@gate.smartproxy.com:7000"

@@ -1,0 +1,21 @@
+# Local data & DB (your job pipeline — keep private)
+data/*.db
+data/*.csv
+data/*.tsv
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets
+.env
+config/secrets.yml
