@@ -85,3 +85,41 @@ def is_core(title: str) -> bool:
 
 def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+
+
+# ── US location detection (primary search is USA) ──────────────────────────
+_US_STATES = {
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
+    "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
+    "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana", "maine",
+    "maryland", "massachusetts", "michigan", "minnesota", "mississippi",
+    "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey",
+    "new mexico", "new york", "north carolina", "north dakota", "ohio",
+    "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina",
+    "south dakota", "tennessee", "texas", "utah", "vermont", "virginia",
+    "washington", "west virginia", "wisconsin", "wyoming",
+}
+_US_ABBR = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID",
+    "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS",
+    "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
+    "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV",
+    "WI", "WY", "DC", "PR",
+}
+
+
+def is_us_location(loc: str) -> bool:
+    """True if a job's location text looks US-based (or is unknown/remote).
+
+    Positive detection: 'USA'/'United States', a state name, or a 2-letter
+    state abbreviation. Empty, 'Remote', and generic 'N Locations' strings
+    pass (don't drop jobs for missing data)."""
+    l = (loc or "").strip()
+    if not l:
+        return True
+    low = l.lower()
+    if "united states" in low or "usa" in low or "remote" in low or "location" in low:
+        return True
+    if any(s in low for s in _US_STATES):
+        return True
+    return bool(_US_ABBR & set(re.findall(r"\b([A-Z]{2})\b", l)))

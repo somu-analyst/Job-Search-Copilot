@@ -66,6 +66,10 @@ def init(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
         """
     )
+    # migrations for older DBs
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)")}
+    if "date_applied" not in cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN date_applied TEXT DEFAULT ''")
     conn.commit()
 
 
