@@ -51,6 +51,12 @@ filters:
     [fraud, aml, financial crime, credit risk, ccar, cecl, compliance, sas,
      bsa, kyc, risk analy, stress test]
 
+# Free aggregator API keys (optional — sources are skipped if absent)
+api_keys:
+  adzuna_app_id: ""      # free instant signup: https://developer.adzuna.com
+  adzuna_app_key: ""
+  jooble_key: ""         # free key by email: https://jooble.org/api/about
+
 scrape:
   board_sites: [indeed, linkedin, google]   # ziprecruiter/glassdoor block scrapers
   # Optional: add proxies to re-enable blocked sites & dodge LinkedIn rate limits.

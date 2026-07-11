@@ -36,10 +36,14 @@ def load(sql, params=()):
 
 st.title("💼 BFSI Job Hunter")
 c = db.counts(conn)
-m1, m2, m3 = st.columns(3)
+n_applied = conn.execute(
+    "SELECT COUNT(*) FROM jobs WHERE status IN ('applied','responded','interview','offer')"
+).fetchone()[0]
+m1, m2, m3, m4 = st.columns(4)
 m1.metric("Jobs found", c["jobs"])
 m2.metric("Unreviewed", c["new"])
-m3.metric("Companies", c["companies"])
+m3.metric("Applied", n_applied)
+m4.metric("Companies", c["companies"])
 
 
 def _post_process():
@@ -62,71 +66,145 @@ with st.sidebar:
             _post_process()
             s.update(label=f"Done — +{n} new jobs", state="complete")
         st.rerun()
-    if st.button("🌐 Full scan — boards + Workday (~5–10 min)", use_container_width=True):
-        from src import scrape_boards, scrape_workday
+    if st.button("🌐 Full scan — all sources (~5–10 min)", use_container_width=True):
+        from src import scrape_boards, scrape_workday, scrape_apis
         with st.status("Full scan running — leave this tab open...", expanded=True) as s:
-            st.write("1/2 Job boards (Indeed / LinkedIn / Google)...")
+            st.write("1/3 Job boards (Indeed / LinkedIn / Google)...")
             nb = scrape_boards.run(conn, verbose=False)
             st.write(f"Boards: **+{nb}** new jobs")
-            st.write("2/2 Workday bank APIs...")
+            st.write("2/3 Workday bank APIs...")
             nw = scrape_workday.run(conn, verbose=False)
             st.write(f"Workday: **+{nw}** new jobs")
+            st.write("3/3 Aggregator APIs (Adzuna / Jooble, if keys set)...")
+            na = scrape_apis.run(conn, verbose=False)
+            st.write(f"APIs: **+{na}** new jobs")
             _post_process()
-            s.update(label=f"Done — +{nb + nw} new jobs", state="complete")
+            s.update(label=f"Done — +{nb + nw + na} new jobs", state="complete")
         st.rerun()
     st.divider()
     st.caption(f"DB: `{db.DB_PATH.name}` · statuses: {', '.join(db.STATUSES)}")
 
-tab_jobs, tab_co, tab_h1b, tab_sum = st.tabs(
-    ["📋 Jobs", "🏢 Companies", "🎫 H-1B Sponsors", "📊 Summary"])
+tab_jobs, tab_applied, tab_co, tab_h1b, tab_sum = st.tabs(
+    ["📋 Jobs", "✅ Applied", "🏢 Companies", "🎫 H-1B Sponsors", "📊 Summary"])
 
 # ── Jobs tab ────────────────────────────────────────────────────────────────
+from src.score import MUST_APPLY_AT
+
+APPLIED_STATES = ("applied", "responded", "interview", "offer")
+
+
+def _save_edits(df, edited, key_note="notes"):
+    """Persist status/notes edits; stamp date_applied when a job turns applied."""
+    n = 0
+    for i, row in edited.iterrows():
+        orig = df.iloc[i]
+        status_changed = row["status"] != orig["status"]
+        notes_changed = (row.get(key_note) or "") != (orig[key_note] or "")
+        if status_changed or notes_changed:
+            conn.execute("UPDATE jobs SET status=?, notes=? WHERE rowid=?",
+                         (row["status"], row.get(key_note) or "", int(orig["rowid"])))
+            if status_changed and row["status"] in APPLIED_STATES and not (orig["date_applied"] or ""):
+                conn.execute("UPDATE jobs SET date_applied=? WHERE rowid=?",
+                             (db.today(), int(orig["rowid"])))
+            n += 1
+    conn.commit()
+    return n
+
+
 with tab_jobs:
-    left, right = st.columns([3, 1])
-    with right:
-        status_f = st.multiselect("Status", db.STATUSES, default=["new", "interested"])
-        core_only = st.checkbox("Core-fit only (fraud/risk/AML/SAS)", value=False)
-        kw = st.text_input("Search title/company")
-    q = "SELECT rowid, url, title, company, location, source, is_core, status, score, notes FROM jobs WHERE 1=1"
-    p = []
+    with st.expander("🔍 Filters", expanded=True):
+        f1, f2, f3, f4 = st.columns([1.2, 1, 1, 1.2])
+        with f1:
+            status_f = st.multiselect("Status", db.STATUSES, default=["new", "interested"])
+        with f2:
+            min_score = st.slider("Min score (1–10)", 1.0, 10.0, 1.0, 0.5)
+            must_only = st.checkbox(f"🔥 Must-apply only (≥ {MUST_APPLY_AT:.0f})")
+        with f3:
+            companies_all = [r[0] for r in conn.execute(
+                "SELECT DISTINCT company FROM jobs ORDER BY company")]
+            company_f = st.multiselect("Company", companies_all)
+            source_f = st.multiselect("Source", [r[0] for r in conn.execute(
+                "SELECT DISTINCT source FROM jobs")])
+        with f4:
+            kw = st.text_input("Search title/company")
+            core_only = st.checkbox("Core-fit ★ only")
+
+    q = """SELECT rowid, url, title, company, location, score, date_posted,
+                  date_found, source, is_core, status, notes, date_applied
+           FROM jobs WHERE score >= ?"""
+    p = [must_only and MUST_APPLY_AT or min_score]
     if status_f:
         q += f" AND status IN ({','.join('?'*len(status_f))})"; p += status_f
+    if company_f:
+        q += f" AND company IN ({','.join('?'*len(company_f))})"; p += company_f
+    if source_f:
+        q += f" AND source IN ({','.join('?'*len(source_f))})"; p += source_f
     if core_only:
         q += " AND is_core = 1"
     if kw:
         q += " AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ?)"; p += [f"%{kw.lower()}%"]*2
-    q += " ORDER BY score DESC, is_core DESC, date_found DESC"
+    q += " ORDER BY score DESC, date_found DESC"
     df = load(q, p)
 
-    with left:
-        st.caption(f"{len(df)} jobs — edit **Status** / **Notes**, click a URL to open, then Save.")
+    st.caption(f"{len(df)} jobs — set **Status** to `applied` and it moves to the "
+               f"✅ Applied tab with today's date. 🔥 = must apply (score ≥ {MUST_APPLY_AT:.0f}).")
     if df.empty:
-        st.info("No jobs yet. Run `python run.py` to fetch some.")
+        st.info("No jobs match. Loosen filters or run a scan from the sidebar.")
     else:
-        view = df.drop(columns=["rowid"]).copy()
-        view.insert(0, "★", view.pop("is_core").map({1: "★", 0: ""}))
+        view = df.drop(columns=["rowid", "is_core", "date_applied"]).copy()
+        view.insert(0, "🔥 Must", (df["score"] >= MUST_APPLY_AT).map({True: "🔥 YES", False: ""}))
         edited = st.data_editor(
-            view, hide_index=True, use_container_width=True, height=560,
+            view, hide_index=True, use_container_width=True, height=520,
             column_config={
                 "url": st.column_config.LinkColumn("Link", display_text="open ↗"),
                 "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES),
-                "score": st.column_config.NumberColumn("Score", format="%.1f"),
+                "score": st.column_config.NumberColumn("Score", format="%.1f / 10"),
                 "title": st.column_config.TextColumn("Title", width="large"),
+                "date_posted": st.column_config.TextColumn("Posted"),
+                "date_found": st.column_config.TextColumn("Pulled"),
             },
-            disabled=["★", "title", "company", "location", "source", "url", "score"],
+            disabled=["🔥 Must", "title", "company", "location", "source", "url",
+                      "score", "date_posted", "date_found"],
             key="jobs_editor",
         )
         if st.button("💾 Save changes", type="primary"):
-            n = 0
-            for i, row in edited.iterrows():
-                orig = df.iloc[i]
-                if row["status"] != orig["status"] or (row.get("notes") or "") != (orig["notes"] or ""):
-                    conn.execute("UPDATE jobs SET status=?, notes=? WHERE rowid=?",
-                                 (row["status"], row.get("notes") or "", int(orig["rowid"])))
-                    n += 1
-            conn.commit()
+            n = _save_edits(df, edited)
             st.success(f"Saved {n} change(s).")
             st.rerun()
+
+# ── Applied tab ─────────────────────────────────────────────────────────────
+with tab_applied:
+    st.caption("Everything you've applied to, with dates. Update status as "
+               "companies respond (responded → interview → offer / rejected).")
+    dfa = load(f"""SELECT rowid, url, title, company, location, score,
+                          date_applied, date_posted, date_found, status, notes
+                   FROM jobs WHERE status IN ('applied','responded','interview','offer','rejected')
+                   ORDER BY date_applied DESC, score DESC""")
+    if dfa.empty:
+        st.info("Nothing applied yet — mark jobs as `applied` in the Jobs tab.")
+    else:
+        viewa = dfa.drop(columns=["rowid"]).copy()
+        editeda = st.data_editor(
+            viewa, hide_index=True, use_container_width=True, height=520,
+            column_config={
+                "url": st.column_config.LinkColumn("Link", display_text="open ↗"),
+                "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES),
+                "score": st.column_config.NumberColumn("Score", format="%.1f / 10"),
+                "date_applied": st.column_config.TextColumn("Applied on"),
+                "date_posted": st.column_config.TextColumn("Posted"),
+                "date_found": st.column_config.TextColumn("Pulled"),
+                "title": st.column_config.TextColumn("Title", width="large"),
+            },
+            disabled=["title", "company", "location", "url", "score",
+                      "date_applied", "date_posted", "date_found"],
+            key="applied_editor",
+        )
+        if st.button("💾 Save applied changes", type="primary"):
+            n = _save_edits(dfa, editeda)
+            st.success(f"Saved {n} change(s).")
+            st.rerun()
+        st.download_button("⬇ Export applied (CSV)", dfa.drop(columns=["rowid"]).to_csv(index=False),
+                           "applied-jobs.csv", "text/csv")
 
 # ── Companies tab ───────────────────────────────────────────────────────────
 with tab_co:

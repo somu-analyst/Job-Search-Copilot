@@ -10,7 +10,7 @@ Token-free end to end. Every job gets a $0 keyword fit-score; optionally hand
 top URLs to career-ops for LLM scoring later.
 """
 import sys
-from src import db, scrape_boards, scrape_workday, score, sponsors
+from src import db, scrape_boards, scrape_workday, scrape_apis, score, sponsors
 
 
 def main() -> int:
@@ -30,6 +30,9 @@ def main() -> int:
     if not only_boards:
         print("Workday JSON API (banks):")
         total_new += scrape_workday.run(conn)
+    if not (only_boards or only_wd):
+        print("Aggregator APIs (Adzuna / Jooble):")
+        total_new += scrape_apis.run(conn)
 
     print("Post-processing:")
     score.score_all(conn)

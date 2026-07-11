@@ -17,7 +17,7 @@ except ImportError:
     yaml = None
 
 from . import db
-from .sources import QUERIES, title_ok, is_core
+from .sources import QUERIES, title_ok, is_core, is_us_location
 
 _CFG = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
 
@@ -69,7 +69,7 @@ def run(conn, *, hours_old=48, results_per_query=25, verbose=True) -> int:
                 title = str(r.get("title") or "")
                 company = str(r.get("company") or "")
                 loc = str(r.get("location") or "")
-                if not url or not title_ok(title):
+                if not url or not title_ok(title) or not is_us_location(loc):
                     continue
                 core = is_core(title)
                 if db.upsert_job(conn, url=url, title=title, company=company,

@@ -17,7 +17,7 @@ import sys
 import requests
 
 from . import db
-from .sources import QUERIES, title_ok, is_core
+from .sources import QUERIES, title_ok, is_core, is_us_location
 
 # (label, host, tenant, site) — all verified returning HTTP 200
 TENANTS = [
@@ -64,10 +64,23 @@ def run(conn, *, verbose=True) -> int:
                 path = p.get("externalPath", "")
                 if not title_ok(title) or not path:
                     continue
-                url = f"https://{host}{path}"
+                # externalPath lacks the site segment — without /en-US/{site}
+                # the link 404s on the bank's careers page
+                url = f"https://{host}/en-US/{site}{path}"
                 loc = p.get("locationsText", "")
+                # "2 Locations"-style text is uninformative; the path's city
+                # segment (/job/{City-State-Country}/...) is the real signal
+                seg = ""
+                if "/job/" in path:
+                    seg = path.split("/job/")[1].split("/")[0].replace("-", " ")
+                test_loc = loc if loc and "location" not in loc.lower() else seg
+                if not is_us_location(test_loc):   # primary search = USA
+                    continue
+                if seg and (not loc or "location" in loc.lower()):
+                    loc = seg.title()
                 if db.upsert_job(conn, url=url, title=title, company=label,
-                                 location=loc, source="workday", is_core=is_core(title)):
+                                 location=loc, source="workday", is_core=is_core(title),
+                                 date_posted=p.get("postedOn", "")):
                     added += 1
                     seen_here += 1
         db.touch_company(conn, label, source="workday",
