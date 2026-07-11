@@ -158,13 +158,16 @@ with tab_jobs:
         st.info("No jobs match. Loosen filters or run a scan from the sidebar.")
     else:
         view = df.drop(columns=["rowid", "is_core", "date_applied"]).copy()
+        view.insert(0, "score", view.pop("score"))          # resume-fit first
         view.insert(0, "🔥 Must", (df["score"] >= MUST_APPLY_AT).map({True: "🔥 YES", False: ""}))
         edited = st.data_editor(
             view, hide_index=True, use_container_width=True, height=520,
             column_config={
                 "url": st.column_config.LinkColumn("Link", display_text="open ↗"),
                 "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES),
-                "score": st.column_config.NumberColumn("Score", format="%.1f / 10"),
+                "score": st.column_config.NumberColumn("Resume fit", format="%.1f / 10",
+                                                        help="1-10 match vs your target-role keywords, "
+                                                             "seniority and H-1B sponsor history"),
                 "title": st.column_config.TextColumn("Title", width="large"),
                 "date_posted": st.column_config.TextColumn("Posted"),
                 "date_found": st.column_config.TextColumn("Pulled"),
