@@ -116,6 +116,9 @@ with tab_jobs:
         f1, f2, f3, f4 = st.columns([1.2, 1, 1, 1.2])
         with f1:
             status_f = st.multiselect("Status", db.STATUSES, default=["new", "interested"])
+            AGE_OPTS = {"Any time": None, "Today": 0, "1 day": 1, "3 days": 3,
+                        "1 week": 7, "2 weeks": 14, "1 month": 30}
+            age_f = st.selectbox("Freshness (pulled)", list(AGE_OPTS), index=0)
         with f2:
             min_score = st.slider("Min score (1–10)", 1.0, 10.0, 1.0, 0.5)
             must_only = st.checkbox(f"🔥 Must-apply only (≥ {MUST_APPLY_AT:.0f})")
@@ -143,6 +146,9 @@ with tab_jobs:
         q += " AND is_core = 1"
     if kw:
         q += " AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ?)"; p += [f"%{kw.lower()}%"]*2
+    days = AGE_OPTS[age_f]
+    if days is not None:
+        q += " AND date_found >= date('now', ?)"; p.append(f"-{days} days")
     q += " ORDER BY score DESC, date_found DESC"
     df = load(q, p)
 
