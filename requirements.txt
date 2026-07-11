@@ -3,3 +3,4 @@ streamlit>=1.36
 pandas>=2.0
 requests>=2.31
 PyYAML>=6.0
+markdown>=3.5
