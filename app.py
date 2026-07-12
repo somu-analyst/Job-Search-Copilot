@@ -17,9 +17,11 @@ Information architecture
   Insights   → funnel + top employers + exports
 """
 from __future__ import annotations
+import base64
 import re
 import sqlite3
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -29,9 +31,20 @@ from src import db
 from src.score import MUST_APPLY_AT
 import ui
 
-st.set_page_config(page_title="Job Search Copilot", page_icon="🧭",
+ASSETS = Path(__file__).resolve().parent / "assets"
+_ICON = ASSETS / "favicon.png"
+
+st.set_page_config(page_title="Job Search Copilot",
+                   page_icon=str(_ICON) if _ICON.exists() else "🏹",
                    layout="wide", initial_sidebar_state="collapsed")
 ui.inject()
+
+
+@st.cache_data
+def _logo_b64() -> str:
+    """Inline the mark so the hero needs no static-file server."""
+    p = ASSETS / "logo-180.png"
+    return base64.b64encode(p.read_bytes()).decode() if p.exists() else ""
 
 APPLIED_STATES = ("applied", "responded", "interview", "offer")
 AGE_OPTS = {"Any time": None, "Today": 0, "1 day": 1, "3 days": 3,
@@ -264,7 +277,8 @@ ui.hero("Job Search Copilot",
         "Finds BFSI roles across every source, scores them against your resume, "
         "tailors it per job, and links you straight to the employer's own "
         "application page — never a reposter.",
-        kicker="find · tailor · apply · track")
+        kicker="find · tailor · apply · track",
+        logo_b64=_logo_b64())
 
 k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Jobs found", f"{c['jobs']:,}")

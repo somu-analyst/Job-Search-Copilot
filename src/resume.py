@@ -81,18 +81,43 @@ def load_co_profile() -> dict:
     return local
 
 
+# ATS-safe by construction: single column, no tables, no floats, no graphics,
+# no text in images, no headers/footers. Everything a parser needs is plain
+# semantic HTML — the styling only affects how a HUMAN sees it.
 _STYLE = """
-body{font-family:Calibri,Arial,sans-serif;max-width:8.2in;margin:0 auto;
-     padding:24px 32px;color:#1a1a1a;font-size:10.6pt;line-height:1.35}
-h1{font-size:17pt;margin:0 0 2px;color:#0f2a4a}
-h2{font-size:11.5pt;border-bottom:1.5px solid #0f2a4a;color:#0f2a4a;
-   margin:14px 0 6px;padding-bottom:2px;text-transform:uppercase;letter-spacing:.4px}
-h3{font-size:10.8pt;margin:10px 0 2px}
-ul{margin:4px 0 8px;padding-left:18px} li{margin:2px 0}
-p{margin:4px 0} strong{color:#0f2a4a}
-.target{background:#eef4fb;border-left:3px solid #0f2a4a;padding:6px 10px;
-        margin:8px 0;font-size:10.2pt}
-@media print{.target{-webkit-print-color-adjust:exact}}
+@page{margin:0.5in}
+body{font-family:Calibri,Carlito,Arial,sans-serif;max-width:8.0in;margin:0 auto;
+     padding:26px 34px 30px;color:#1F2328;font-size:10.4pt;line-height:1.42}
+
+/* Name + contact line */
+h1{font-size:20pt;margin:0;color:#111418;font-weight:700;letter-spacing:-.4px}
+h1 + p{margin:3px 0 0;font-size:10pt;color:#3A4048}
+h1 + p strong{color:#15803D;font-weight:600;letter-spacing:.2px}
+h1 + p a{color:#3A4048;text-decoration:none;border-bottom:1px solid #C9CFD6}
+
+/* Section headings: a rule the eye can lock onto while skimming */
+h2{font-size:9.8pt;color:#15803D;font-weight:700;text-transform:uppercase;
+   letter-spacing:1.1px;margin:17px 0 7px;padding-bottom:3px;
+   border-bottom:1px solid #D7DCE2}
+
+/* Employer — role */
+h3{font-size:11pt;margin:11px 0 1px;color:#111418;font-weight:700}
+/* Dates line (italic in the markdown) */
+h3 + p em{color:#5B6472;font-size:9.4pt;font-style:normal;letter-spacing:.2px}
+
+ul{margin:5px 0 9px;padding-left:16px}
+li{margin:3px 0;padding-left:2px}
+p{margin:5px 0}
+
+/* Bold is EARNED, not decoration: only the strongest outcome per role carries
+   it, so a skimming recruiter's eye lands on results instead of wallpaper. */
+strong{color:#111418;font-weight:700}
+
+@media print{
+  body{padding:0}
+  h2{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  h3{page-break-after:avoid} ul{page-break-inside:avoid}
+}
 """
 
 
