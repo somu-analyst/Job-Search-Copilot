@@ -74,7 +74,8 @@ def run(conn, *, hours_old=48, results_per_query=25, verbose=True) -> int:
                 core = is_core(title)
                 if db.upsert_job(conn, url=url, title=title, company=company,
                                  location=loc, source=site, is_core=core,
-                                 date_posted=str(r.get("date_posted") or "")):
+                                 date_posted=str(r.get("date_posted") or ""),
+                                 description=str(r.get("description") or "")):
                     added += 1
                 db.touch_company(conn, company, source=site)
     conn.commit()

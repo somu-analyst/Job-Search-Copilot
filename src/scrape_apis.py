@@ -57,7 +57,8 @@ def _adzuna(conn, app_id, app_key, verbose=True) -> int:
                     continue
                 if db.upsert_job(conn, url=url, title=title, company=comp,
                                  location=loc, source="adzuna", is_core=is_core(title),
-                                 date_posted=(j.get("created", "") or "")[:10]):
+                                 date_posted=(j.get("created", "") or "")[:10],
+                                 description=j.get("description", "")):
                     added += 1
                 db.touch_company(conn, comp, source="adzuna")
         except Exception as e:
@@ -86,7 +87,8 @@ def _jooble(conn, key, verbose=True) -> int:
                 if db.upsert_job(conn, url=url, title=title, company=comp,
                                  location=j.get("location", ""), source="jooble",
                                  is_core=is_core(title),
-                                 date_posted=(j.get("updated", "") or "")[:10]):
+                                 date_posted=(j.get("updated", "") or "")[:10],
+                                 description=j.get("snippet", "")):
                     added += 1
                 db.touch_company(conn, comp, source="jooble")
         except Exception as e:
