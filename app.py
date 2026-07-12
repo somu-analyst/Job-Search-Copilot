@@ -419,6 +419,41 @@ with tab_resume:
 </div>""", unsafe_allow_html=True)
         st.link_button("↗ Open the job posting", job["url"], use_container_width=False)
 
+        # ── JD fetch (once), sponsorship/location screen, optional viewer ──
+        from src import jd_match as _jdm
+        jd_text = _jdm.fetch_jd(job["url"])
+        flags = _jdm.jd_flags(jd_text)
+        if flags["block"]:
+            st.error("🚫 **Likely deal-breaker for your H-1B status:** "
+                     + " · ".join(flags["block"])
+                     + "  — verify before spending an application.")
+        for n in flags["note"]:
+            st.warning("⚠️ " + n)
+
+        jv1, jv2 = st.columns([1, 2])
+        with jv1:
+            show_jd = st.checkbox("📄 View full job description", value=False, key="show_jd")
+        with jv2:
+            jd_where = st.radio("Show it in", ["Inline (right here)", "Left sidebar"],
+                                horizontal=True, key="jd_where",
+                                label_visibility="collapsed") if show_jd else None
+        if show_jd:
+            if not jd_text.strip():
+                st.info("Full JD isn't fetchable for this source (LinkedIn/Indeed block it). "
+                        "Use the ↗ posting link. Workday jobs show the full JD here.")
+            elif jd_where == "Left sidebar":
+                with st.sidebar:
+                    st.markdown(f"### 📄 JD — {job['title'][:40]}")
+                    st.markdown(
+                        f"<div style='max-height:75vh;overflow:auto;font-size:13px;"
+                        f"line-height:1.5'>{jd_text}</div>", unsafe_allow_html=True)
+            else:
+                with st.expander("📄 Full job description", expanded=True):
+                    st.markdown(
+                        f"<div style='max-height:480px;overflow:auto;padding:6px 4px;"
+                        f"font-size:14px;line-height:1.55'>{jd_text}</div>",
+                        unsafe_allow_html=True)
+
         # ── Position-fit analysis (JD fetched from Workday API when possible) ──
         st.markdown("#### Step 2 — Fit scores")
         from src import jd_match

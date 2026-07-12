@@ -72,6 +72,44 @@ def fetch_jd(url: str) -> str:
         return ""
 
 
+def jd_flags(jd: str) -> dict:
+    """Scan a JD for deal-breakers a visa-dependent, US-based candidate cares about.
+    Returns {'block': [...red flags...], 'note': [...things to check...]}."""
+    t = (jd or "").lower()
+    block, note = [], []
+    if not t.strip():
+        return {"block": [], "note": ["Full JD not available for this source — verify on the posting."]}
+
+    # ── Sponsorship / work-authorization blockers ──
+    spons_block = [
+        "no sponsorship", "not able to sponsor", "unable to sponsor",
+        "will not sponsor", "without sponsorship", "no visa sponsorship",
+        "sponsorship is not", "not provide sponsorship", "not offer sponsorship",
+        "must be authorized to work in the united states without",
+        "no relocation or visa", "us citizens only", "u.s. citizens only",
+        "must be a us citizen", "must be a u.s. citizen", "citizenship is required",
+        "security clearance", "active clearance", "public trust clearance",
+        "green card holder", "gc holder only",
+    ]
+    for phrase in spons_block:
+        if phrase in t:
+            block.append(f"Sponsorship/authorization blocker: “{phrase}”")
+            break
+    if "clearance" in t and not any("clearance" in b for b in block):
+        note.append("Mentions a security clearance — often citizen-only.")
+
+    # ── Location / onsite constraints ──
+    if any(w in t for w in ["fully onsite", "100% onsite", "on-site 5 days",
+                            "in office 5", "onsite daily", "must relocate"]):
+        note.append("Appears fully onsite / relocation required — confirm it fits NJ.")
+    elif "hybrid" in t:
+        note.append("Hybrid role — check the office location and days/week.")
+    if "remote" in t and "not remote" not in t:
+        note.append("Mentions remote — may be flexible on location.")
+
+    return {"block": block, "note": note}
+
+
 def _resume_text() -> str:
     from pathlib import Path
     txt = load_cv_md()
