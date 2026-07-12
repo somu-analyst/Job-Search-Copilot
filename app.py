@@ -83,8 +83,18 @@ st.markdown("""
 h2,h3{color:var(--navy);}
 h4{color:var(--blue);font-weight:700;margin-top:8px;}
 h5{color:var(--navy);font-weight:700;}
-.stTextInput input,.stSelectbox div[data-baseweb="select"]>div,
-.stMultiSelect div[data-baseweb="select"]>div{border-radius:8px;}
+.stTextInput input{border-radius:8px;border:1.5px solid var(--line);}
+/* Dropdowns — clearly bordered so they read as selectable */
+.stSelectbox div[data-baseweb="select"]>div,
+.stMultiSelect div[data-baseweb="select"]>div{
+  border-radius:8px;border:2px solid #b9cbe0!important;background:#fff!important;
+  min-height:42px;cursor:pointer;box-shadow:0 1px 3px rgba(16,40,70,.06);
+  transition:border-color .15s,box-shadow .15s;}
+.stSelectbox div[data-baseweb="select"]>div:hover,
+.stMultiSelect div[data-baseweb="select"]>div:hover{
+  border-color:var(--blue)!important;box-shadow:0 0 0 3px rgba(15,94,168,.12);}
+/* Visible dropdown chevron */
+.stSelectbox svg,.stMultiSelect svg{color:var(--blue);width:22px;height:22px;}
 .stSelectbox label,.stTextInput label,.stMultiSelect label,
 .stSlider label,.stCheckbox label{font-weight:600;color:#3d4d5e;}
 [data-testid="stCode"]{border-radius:9px;border:1px solid var(--line);}
@@ -389,7 +399,8 @@ with tab_resume:
         st.markdown(f"**{len(jobs_pick)} matching jobs** — choose one below ⬇️")
         labels = [f"{'🔥 ' if r.score >= 8 else ''}{r.score:.1f}/10  •  {r.title[:64]}  •  {r.company}"
                   for r in jobs_pick.itertuples()]
-        idx = st.selectbox("🎯 Job to apply for", range(len(labels)),
+        idx = st.selectbox("🎯 Job to apply for  (click to open the list ▾)",
+                           range(len(labels)),
                            format_func=lambda i: labels[i], key="pick_job")
         job = jobs_pick.iloc[idx]
 
