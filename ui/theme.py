@@ -77,10 +77,30 @@ p,li,span,label{font-size:14px;}
   box-shadow:var(--sh-md);position:relative;overflow:hidden;}
 .hero:after{content:"";position:absolute;right:-70px;top:-70px;width:250px;height:250px;
   background:radial-gradient(circle,rgba(255,255,255,.13),transparent 68%);}
-.hero h1{color:#fff;margin:0;font-size:26px;}
-.hero p{margin:6px 0 0;opacity:.9;font-size:14px;max-width:640px;}
-.hero .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;
-  text-transform:uppercase;opacity:.75;margin-bottom:5px;}
+/* Identity left, system-flow right — the right side used to be dead space. */
+.hero-grid{display:flex;align-items:center;justify-content:space-between;
+  gap:28px;flex-wrap:wrap;position:relative;z-index:1;}
+.hero-id{display:flex;align-items:center;gap:15px;}
+.hero-logo{width:56px;height:56px;border-radius:14px;flex:none;
+  box-shadow:0 4px 14px -3px rgba(0,0,0,.35);}
+.hero h1{color:#fff;margin:0;font-size:34px;font-weight:800;letter-spacing:-.03em;
+  line-height:1.05;}
+.hero p{margin:12px 0 0;opacity:.88;font-size:14px;max-width:680px;
+  position:relative;z-index:1;}
+.hero .kicker{font-size:10.5px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;opacity:.72;margin-bottom:3px;}
+
+/* The five-stage flow: the whole system at a glance, so a new user gets it
+   before scrolling. Hidden on narrow screens rather than wrapping into mush. */
+.hero-flow{display:flex;align-items:flex-start;gap:2px;}
+.fl-step{text-align:center;min-width:64px;}
+.fl-dot{width:24px;height:24px;border-radius:50%;margin:0 auto 5px;
+  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.32);
+  color:#fff;font-size:11px;font-weight:800;line-height:23px;}
+.fl-lab{font-size:12.5px;font-weight:700;color:#fff;letter-spacing:-.01em;}
+.fl-sub{font-size:9.5px;color:rgba(255,255,255,.6);margin-top:1px;line-height:1.25;}
+.fl-arw{color:rgba(255,255,255,.38);font-size:13px;padding-top:2px;}
+@media (max-width:1150px){ .hero-flow{display:none;} }
 
 /* ── KPI strip ──────────────────────────────────────────────── */
 [data-testid="stMetric"]{background:var(--sf);border:1px solid var(--line);

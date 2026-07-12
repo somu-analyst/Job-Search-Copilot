@@ -15,12 +15,41 @@ def _esc(s) -> str:
 
 
 # ── Hero ────────────────────────────────────────────────────────────────────
-def hero(title: str, subtitle: str, kicker: str = "") -> None:
-    """Top-of-page banner. Says what the app does, in one breath."""
+# The five stages of the product, shown as a flow on the right of the hero.
+# This is the whole system in one glance — a new user should understand what the
+# app does before scrolling. (label, one-word what-it-does)
+FLOW = [
+    ("Find", "every source"),
+    ("Score", "vs your resume"),
+    ("Tailor", "per job"),
+    ("Apply", "direct link"),
+    ("Track", "dates & follow-ups"),
+]
+
+
+def hero(title: str, subtitle: str, kicker: str = "", logo_b64: str = "") -> None:
+    """Top-of-page banner: identity on the left, the system's flow on the right."""
     k = f"<div class='kicker'>{_esc(kicker)}</div>" if kicker else ""
+    mark = (f"<img class='hero-logo' src='data:image/png;base64,{logo_b64}' "
+            f"alt='' />") if logo_b64 else ""
+
+    steps = []
+    for i, (label, sub) in enumerate(FLOW):
+        steps.append(
+            f"<div class='fl-step'><div class='fl-dot'>{i+1}</div>"
+            f"<div class='fl-lab'>{_esc(label)}</div>"
+            f"<div class='fl-sub'>{_esc(sub)}</div></div>")
+        if i < len(FLOW) - 1:
+            steps.append("<div class='fl-arw'>&rarr;</div>")
+
     st.markdown(
-        f"<div class='hero'>{k}<h1>{_esc(title)}</h1><p>{_esc(subtitle)}</p></div>",
-        unsafe_allow_html=True)
+        f"""<div class='hero'>
+  <div class='hero-grid'>
+    <div class='hero-id'>{mark}<div>{k}<h1>{_esc(title)}</h1></div></div>
+    <div class='hero-flow'>{''.join(steps)}</div>
+  </div>
+  <p>{_esc(subtitle)}</p>
+</div>""", unsafe_allow_html=True)
 
 
 # ── Chips ───────────────────────────────────────────────────────────────────
