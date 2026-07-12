@@ -70,6 +70,8 @@ def init(conn: sqlite3.Connection) -> None:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)")}
     if "date_applied" not in cols:
         conn.execute("ALTER TABLE jobs ADD COLUMN date_applied TEXT DEFAULT ''")
+    if "description" not in cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN description TEXT DEFAULT ''")
     ccols = {r[1] for r in conn.execute("PRAGMA table_info(companies)")}
     if "industry" not in ccols:
         conn.execute("ALTER TABLE companies ADD COLUMN industry TEXT DEFAULT ''")
@@ -92,7 +94,7 @@ def enrich_industries(conn) -> int:
 
 
 def upsert_job(conn, *, url, title, company, location, source,
-               is_core=False, date_posted="") -> bool:
+               is_core=False, date_posted="", description="") -> bool:
     """Insert a job if new. Returns True if it was newly added."""
     if not url:
         return False
@@ -101,10 +103,10 @@ def upsert_job(conn, *, url, title, company, location, source,
         return False
     conn.execute(
         """INSERT INTO jobs (url, title, company, location, source, is_core,
-                             date_found, date_posted, status)
-           VALUES (?,?,?,?,?,?,?,?,'new')""",
+                             date_found, date_posted, status, description)
+           VALUES (?,?,?,?,?,?,?,?,'new',?)""",
         (url, title, company, location, source, 1 if is_core else 0,
-         today(), date_posted),
+         today(), date_posted, (description or "")[:12000]),
     )
     return True
 

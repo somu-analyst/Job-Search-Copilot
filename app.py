@@ -380,6 +380,7 @@ with tab_resume:
 
     pq = """SELECT jobs.url AS url, jobs.title AS title, jobs.company AS company,
                    jobs.score AS score, jobs.location AS location,
+                   COALESCE(jobs.description,'') AS description,
                    COALESCE(companies.industry,'') AS industry, jobs.status AS status
             FROM jobs LEFT JOIN companies ON jobs.company = companies.name
             WHERE jobs.status NOT IN ('skip','stale','rejected')"""
@@ -420,9 +421,9 @@ with tab_resume:
 </div>""", unsafe_allow_html=True)
         st.link_button("↗ Open the job posting", job["url"], use_container_width=False)
 
-        # ── JD fetch (once), sponsorship/location screen, optional viewer ──
+        # ── JD resolve (Workday API → stored description), screen, viewer ──
         from src import jd_match as _jdm
-        jd_text = _jdm.fetch_jd(job["url"])
+        jd_text = _jdm.fetch_jd(job["url"]) or (job.get("description") or "")
         flags = _jdm.jd_flags(jd_text)
         if flags["block"]:
             st.error("🚫 **Likely deal-breaker for your H-1B status:** "
@@ -459,7 +460,7 @@ with tab_resume:
         st.markdown("#### Step 2 — Fit scores")
         from src import jd_match
         with st.spinner("Analyzing position fit vs your resume..."):
-            fit = jd_match.analyze(job["url"], job["title"])
+            fit = jd_match.analyze(job["url"], job["title"], jd_override=jd_text)
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("Recruiter score", f"{fit['recruiter']}/10",
                   help="Surface match a recruiter skims in 6 sec: does the TITLE and "

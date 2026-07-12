@@ -126,8 +126,8 @@ def _hits(text: str, vocab: list[str]) -> set:
     return {k for k in vocab if k.strip() and f" {k.strip()} " in t or k in text.lower()}
 
 
-def analyze(url: str, title: str, resume_override: str = "") -> dict:
-    jd = fetch_jd(url)
+def analyze(url: str, title: str, resume_override: str = "", jd_override: str = "") -> dict:
+    jd = jd_override or fetch_jd(url)
     resume = resume_override.lower() if resume_override else _resume_text()
     out = {"jd_available": bool(jd.strip())}
 
