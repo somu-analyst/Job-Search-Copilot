@@ -279,6 +279,29 @@ with tab_resume:
         job = jobs_pick.iloc[idx]
         st.link_button("↗ Open job posting", job["url"])
 
+        # ── Position-fit analysis (JD fetched from Workday API when possible) ──
+        from src import jd_match
+        with st.spinner("Analyzing position fit vs your resume..."):
+            fit = jd_match.analyze(job["url"], job["title"])
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("Recruiter score", f"{fit['recruiter']}/10")
+        s2.metric("ATS/Workday score", f"{fit['ats']}/10")
+        s3.metric("Hiring-mgr score", f"{fit['hiring_manager']}/10")
+        s4.metric("OVERALL", f"{fit['overall']}/10")
+        if not fit["jd_available"]:
+            st.caption("⚠ Full JD not fetchable for this source (LinkedIn/Indeed "
+                       "block it) — scores estimated from the title only. "
+                       "Workday jobs get full-JD analysis.")
+        g1, g2 = st.columns(2)
+        with g1:
+            st.markdown("**✅ Highlights — JD asks, you HAVE:**")
+            st.write(", ".join(fit["highlights"]) or "—")
+        with g2:
+            st.markdown("**❌ Missing — JD asks, resume lacks:**")
+            st.write(", ".join(fit["missing"]) or "Nothing — full coverage!")
+        st.caption("Keyword-based estimate ($0). For an LLM judgment, use the "
+                   "career-ops queue button below.")
+
         colL, colR = st.columns(2)
         with colL:
             st.subheader("📄 ATS-clean resume")
@@ -300,6 +323,14 @@ with tab_resume:
             for label, text in rz.apply_kit().items():
                 st.caption(label)
                 st.code(text, language=None)
+            st.caption("Workday assisted apply (experimental — never auto-submits):")
+            if st.button("🚀 Launch assisted apply (opens Chrome)", use_container_width=True):
+                import subprocess, sys as _sys
+                subprocess.Popen([_sys.executable, "apply_assist.py", job["url"]],
+                                 cwd=str(db.DB_PATH.parent.parent),
+                                 creationflags=0x00000008)  # DETACHED_PROCESS
+                st.info("Chrome window opening... first visit per bank: sign in once, "
+                        "it stays saved. Review and press Submit yourself.")
             st.caption("Mark it applied when done:")
             if st.button("✅ Mark this job APPLIED (today)", use_container_width=True):
                 conn.execute("UPDATE jobs SET status='applied', date_applied=? WHERE url=?",
