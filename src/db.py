@@ -62,8 +62,24 @@ def init(conn: sqlite3.Connection) -> None:
             sponsors_h1b  TEXT DEFAULT '',
             notes         TEXT DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS resumes (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at   TEXT,      -- YYYY-MM-DD HH:MM  (when this version was made)
+            job_url      TEXT,      -- FK-ish -> jobs.url  ('' = generic/base version)
+            job_title    TEXT,      -- snapshotted: the JD may vanish from the board
+            company      TEXT,
+            variant      TEXT,      -- e.g. 'Balanced', 'ATS-max', 'Edited by me'
+            summary      TEXT,      -- the tailored Professional Summary
+            resume_md    TEXT,      -- full resume markdown as sent
+            ats          REAL, recruiter REAL, hiring_manager REAL, overall REAL,
+            used_to_apply INTEGER DEFAULT 0,   -- 1 once you actually applied with it
+            applied_at   TEXT DEFAULT '',
+            notes        TEXT DEFAULT ''
+        );
         CREATE INDEX IF NOT EXISTS idx_jobs_status  ON jobs(status);
         CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
+        CREATE INDEX IF NOT EXISTS idx_res_job      ON resumes(job_url);
+        CREATE INDEX IF NOT EXISTS idx_res_applied  ON resumes(used_to_apply);
         """
     )
     # migrations for older DBs

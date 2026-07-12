@@ -305,9 +305,9 @@ with st.sidebar:
     st.caption(f"DB `{db.DB_PATH.name}` · {c['companies']} companies tracked")
 
 # ── Navigation ──────────────────────────────────────────────────────────────
-t_today, t_jobs, t_applied, t_resume, t_co, t_h1b, t_ins = st.tabs(
-    ["🎯 Today", "📋 Jobs", "✅ Applied", "📄 Resume Studio", "🏢 Companies",
-     "🎫 Sponsors", "📊 Insights"])
+t_today, t_jobs, t_applied, t_resume, t_arch, t_co, t_h1b, t_ins = st.tabs(
+    ["🎯 Today", "📋 Jobs", "✅ Applied", "📄 Resume Studio", "🗂 My Resumes",
+     "🏢 Companies", "🎫 Sponsors", "📊 Insights"])
 
 # ── Today: the answer to "what do I apply to right now?" ────────────────────
 with t_today:
@@ -531,132 +531,151 @@ with t_resume:
             else:
                 st.info("This source doesn't publish the JD — use ↗ Original posting.")
 
-    # Step 3 — AI deep-dive & tailoring
+    # Step 3 — build several versions, compare, edit, archive
     with s3:
-        a1, a2 = st.columns(2)
-        with a1:
-            st.markdown("**🤖 AI deep analysis**")
-            st.caption("A free model reads the JD against your resume and judges fit.")
-            if st.button("Run AI analysis (~30s)", use_container_width=True):
-                from src import ai
-                with st.spinner("Free model reading the JD vs your resume…"):
-                    v = ai.analyze_job(job["url"], job["title"], job["company"])
-                if v:
-                    st.session_state["ai_verdict"] = v
-                    conn.execute("UPDATE jobs SET score=?, notes=? WHERE url=?",
-                                 (float(v.get("score_10", job["score"])), "AI-scored",
-                                  job["url"]))
-                    conn.commit()
-                else:
-                    from src import ai as _a
-                    st.warning("Free AI models are at their daily cap — the keyword "
-                               f"scores in step 2 still apply. ({_a.last_error() or 'busy'})")
-        with a2:
-            st.markdown("**✨ AI-tailored summary**")
-            lvl = st.slider("Tailoring strength (1 = light · 10 = strong reframe)",
-                            1, 10, 5, key="tailor_level",
-                            help="Higher lifts the ATS score but raises over-claim risk — "
-                                 "the authenticity check flags it.")
-            band = "Conservative" if lvl <= 3 else "Balanced" if lvl <= 7 else "Aggressive"
-            st.caption(f"Level {lvl}/10 — **{band}**")
-            if st.button("Tailor my resume (~30s)", use_container_width=True):
-                from src import ai
-                with st.spinner("Tailoring (all free models, then offline fallback)…"):
-                    s = ai.tailor_summary(job["url"], job["title"], job["company"],
-                                          band, intensity=lvl, emphasize=add_kw)
-                    mode = "AI"
-                    if not s:
-                        s = ai.tailor_summary_offline(job["url"], job["title"],
-                                                      job["company"])
-                        mode = "offline"
-                if s:
-                    st.session_state["ai_summary"] = s
-                    st.session_state["ai_summary_mode"] = mode
-                else:
-                    st.error("Could not tailor — check your OpenRouter key.")
-
-        if st.session_state.get("ai_verdict"):
-            v = st.session_state["ai_verdict"]
-            st.success(f"AI score: **{v.get('score_10','?')}/10** (saved to the table)")
-            st.write(f"**Recruiter view:** {v.get('recruiter_view','')}")
-            st.write(f"**Hiring-manager view:** {v.get('hiring_manager_view','')}")
-            v1, v2 = st.columns(2)
-            with v1:
-                st.markdown("**Strengths**")
-                for x in v.get("strengths", []):
-                    st.write("- " + str(x))
-            with v2:
-                st.markdown("**Gaps**")
-                for x in v.get("gaps", []):
-                    st.write("- " + str(x))
-            st.markdown("**Resume tweaks for this job**")
-            for x in v.get("resume_tweaks", []):
-                st.write("- " + str(x))
-
-        if st.session_state.get("ai_summary"):
-            from src import ai as _ai
-            tailored = st.session_state["ai_summary"]
-            if st.session_state.get("ai_summary_mode") == "offline":
-                st.warning("Free models were capped — used instant offline tailoring "
-                           "(keyword-matched, no fabrication).")
-            st.markdown("**✨ Tailored Professional Summary** — facts only, review before use")
-            st.info(tailored)
-
-            base_md = rz.load_cv_md()
-            tailored_md = re.sub(r"(## Professional Summary\s*\n).*?(\n## )",
-                                 r"\1" + tailored + r"\2", base_md, count=1, flags=re.S)
-            nf = jd_match.analyze(job["url"], job["title"], resume_override=tailored_md)
-            d1, d2, d3, d4 = st.columns(4)
-            d1.metric("Recruiter", f"{nf['recruiter']}/10",
-                      delta=round(nf["recruiter"] - fit["recruiter"], 1))
-            d2.metric("ATS / Workday", f"{nf['ats']}/10",
-                      delta=round(nf["ats"] - fit["ats"], 1))
-            d3.metric("Hiring manager", f"{nf['hiring_manager']}/10",
-                      delta=round(nf["hiring_manager"] - fit["hiring_manager"], 1))
-            d4.metric("Overall", f"{nf['overall']}/10",
-                      delta=round(nf["overall"] - fit["overall"], 1))
-            st.caption("Green = the tailored summary improved that score vs your base "
-                       "resume. Nudge the strength slider to trade fit against authenticity.")
-
-            warns = _ai.authenticity_check(tailored, base_md)
-            if warns:
-                st.error("⚠️ **Authenticity check — this may over-claim:**")
-                for w in warns:
-                    st.write("- " + w)
-                st.caption("Fix these before sending — over-claiming fails interviews "
-                           "and background checks. Try a lower strength.")
-            else:
-                st.success("✅ Authenticity check passed — every claim traces to your resume.")
-
-            from src.sources import slugify
-            st.download_button(
-                "⬇ Download AI-tailored resume (HTML → Ctrl+P → PDF)",
-                rz.tailored_resume_html(job["title"], job["company"],
-                                        summary_override=tailored),
-                f"resume-ai-{slugify(job['company'])[:28]}.html", "text/html",
-                use_container_width=True, type="primary")
-
-    # Step 4 — documents & apply
-    with s4:
+        from src import variants as vz, resume_store as rs
         from src.sources import slugify
+
+        st.markdown("**Generate a few versions and pick the best one.** Each is "
+                    "scored against this JD, so you can see what a stronger reframe "
+                    "actually buys you — and what it costs in authenticity.")
+        gc1, gc2 = st.columns([1.4, 2.6])
+        with gc1:
+            if st.button("✨ Build resume versions", use_container_width=True,
+                         type="primary"):
+                with st.spinner("Writing 3 tailored versions and scoring each…"):
+                    vs = vz.build(job["url"], job["title"], job["company"],
+                                  emphasize=add_kw, jd_override=jd_text)
+                for v in vs:                       # archive every version we make
+                    if v["mode"] != "base":
+                        v["id"] = rs.save(conn, job_url=job["url"],
+                                          job_title=job["title"], company=job["company"],
+                                          variant=v["label"], summary=v["summary"],
+                                          resume_md=v["resume_md"], scores=v["scores"])
+                st.session_state["variants"] = vs
+                st.session_state.pop("edited_summary", None)
+        with gc2:
+            st.caption("Versions: **Master** (untouched baseline) · **Conservative** · "
+                       "**Balanced** · **ATS-max**. All are archived with this job "
+                       "and timestamped — see the 🗂 My Resumes tab.")
+
+        vs = st.session_state.get("variants")
+        if not vs:
+            ui.empty("📝", "No versions yet",
+                     "Click Build resume versions — takes ~30s on free models, "
+                     "and falls back to offline tailoring if they're capped.")
+        else:
+            base = vs[0]["scores"]
+            cols = st.columns(len(vs))
+            for col, v in zip(cols, vs):
+                with col:
+                    sc = v["scores"]
+                    st.markdown(f"**{v['label']}**")
+                    st.caption(v["blurb"])
+                    d = None if v["mode"] == "base" else round(
+                        sc["overall"] - base["overall"], 1)
+                    st.metric("Overall", f"{sc['overall']}/10", delta=d)
+                    st.caption(f"ATS {sc['ats']} · Rec {sc['recruiter']} · "
+                               f"HM {sc['hiring_manager']}")
+                    if v["warnings"]:
+                        st.error(f"⚠️ {len(v['warnings'])} over-claim flag(s)")
+                    elif v["mode"] != "base":
+                        st.success("✅ Authentic")
+
+            labels = [v["label"] for v in vs]
+            pick = st.radio("Which version do you want to use?", labels,
+                            index=min(2, len(labels) - 1), horizontal=True,
+                            key="variant_pick")
+            chosen = next(v for v in vs if v["label"] == pick)
+
+            if chosen["warnings"]:
+                st.error("⚠️ **Authenticity check — this version may over-claim:**")
+                for w in chosen["warnings"]:
+                    st.write("- " + w)
+                st.caption("Over-claiming fails interviews and background checks. "
+                           "Edit it below or drop to a gentler version.")
+
+            # ── User edits the summary, then re-scores ──
+            st.markdown("**✏️ Edit before you send** — your words always win.")
+            start = st.session_state.get("edited_summary") or chosen["summary"] \
+                or vs[0]["resume_md"].split("## Professional Summary")[-1]\
+                                     .split("##")[0].strip()
+            edited = st.text_area("Professional Summary", value=start, height=170,
+                                  key="summary_editor",
+                                  help="Rewrite freely. Re-score to see what your "
+                                       "edit did to the ATS/recruiter numbers.")
+            e1, e2 = st.columns([1.2, 2.8])
+            with e1:
+                if st.button("🔄 Re-score my edit", use_container_width=True):
+                    with st.spinner("Re-scoring your edited summary…"):
+                        r = vz.rescore_edited(job["url"], job["title"], edited,
+                                              jd_override=jd_text)
+                    r["id"] = rs.save(conn, job_url=job["url"], job_title=job["title"],
+                                      company=job["company"], variant="Edited by me",
+                                      summary=edited, resume_md=r["resume_md"],
+                                      scores=r["scores"], notes="hand-edited")
+                    st.session_state["edited"] = r
+                    st.session_state["edited_summary"] = edited
+            with e2:
+                st.caption("Your edit is archived as its own version — nothing is "
+                           "overwritten.")
+
+            ed = st.session_state.get("edited")
+            if ed:
+                sc = ed["scores"]
+                st.markdown("**Your edited version, re-scored:**")
+                q1, q2, q3, q4 = st.columns(4)
+                q1.metric("Recruiter", f"{sc['recruiter']}/10",
+                          delta=round(sc["recruiter"] - base["recruiter"], 1))
+                q2.metric("ATS / Workday", f"{sc['ats']}/10",
+                          delta=round(sc["ats"] - base["ats"], 1))
+                q3.metric("Hiring manager", f"{sc['hiring_manager']}/10",
+                          delta=round(sc["hiring_manager"] - base["hiring_manager"], 1))
+                q4.metric("Overall", f"{sc['overall']}/10",
+                          delta=round(sc["overall"] - base["overall"], 1))
+                if ed["warnings"]:
+                    st.error("⚠️ Your edit may over-claim:")
+                    for w in ed["warnings"]:
+                        st.write("- " + w)
+                else:
+                    st.success("✅ Authenticity check passed on your edit.")
+
+            # what step 4 will use
+            final_md = (ed or {}).get("resume_md") or chosen["resume_md"]
+            final_summary = st.session_state.get("edited_summary") or chosen["summary"]
+            st.session_state["final_md"] = final_md
+            st.session_state["final_summary"] = final_summary
+            st.session_state["final_label"] = "Edited by me" if ed else chosen["label"]
+
+            with st.expander("👁 Preview every version side by side"):
+                for v in vs:
+                    st.markdown(f"**{v['label']}** — overall {v['scores']['overall']}/10")
+                    st.info(v["summary"] or "(your master summary, untouched)")
+
+    # Step 4 — documents, outreach, apply
+    with s4:
+        from src import resume_store as rs, outreach as og
+        from src.sources import slugify
+
+        final_summary = st.session_state.get("final_summary", "")
+        final_label = st.session_state.get("final_label", "Master")
+        html_doc = rz.tailored_resume_html(job["title"], job["company"],
+                                           summary_override=final_summary)
+
         d1, d2 = st.columns(2)
         with d1:
-            st.markdown("**📄 ATS-clean documents**")
-            st.caption("Emoji-free, plain formatting — safe for every ATS parser.")
-            html_doc = rz.tailored_resume_html(job["title"], job["company"])
+            st.markdown(f"**📄 Documents** — using **{final_label}**")
+            st.caption("ATS-clean: emoji-free, plain formatting, parser-safe.")
             st.download_button("⬇ Resume (HTML → Ctrl+P → PDF)", html_doc,
                                f"resume-{slugify(job['company'])[:30]}.html",
-                               "text/html", use_container_width=True)
+                               "text/html", use_container_width=True, type="primary")
             st.download_button("⬇ Cover letter (.txt)",
                                rz.cover_letter(job["title"], job["company"]),
-                               "cover-letter.txt", "text/plain", use_container_width=True)
-            with st.expander("Preview resume"):
-                components.html(html_doc, height=560, scrolling=True)
-        with d2:
-            st.markdown("**⚡ Apply kit** — copy/paste blocks")
-            for label, text in rz.apply_kit().items():
-                with st.popover(label, use_container_width=True):
-                    st.code(text, language=None)
+                               "cover-letter.txt", "text/plain",
+                               use_container_width=True)
+            with st.expander("👁 Preview resume"):
+                components.html(html_doc, height=520, scrolling=True)
+
             st.divider()
             st.link_button("✅ Apply on employer site", job["apply_url"],
                            use_container_width=True, type="primary")
@@ -669,10 +688,125 @@ with t_resume:
                                  creationflags=0x00000008)  # DETACHED_PROCESS
                 st.info("Chrome opening… sign in once per employer; it stays saved. "
                         "Review and press Submit yourself.")
-            if st.button("✅ Mark this job applied (today)", use_container_width=True):
+            if st.button("✅ Mark applied (archives this resume)",
+                         use_container_width=True):
                 mark_applied(job["url"])
-                st.success("Moved to ✅ Applied with today's date.")
+                rid = rs.save(conn, job_url=job["url"], job_title=job["title"],
+                              company=job["company"], variant=final_label,
+                              summary=final_summary,
+                              resume_md=st.session_state.get("final_md", ""),
+                              notes="sent with application")
+                rs.mark_applied(conn, rid)
+                st.success("Applied ✓ — this exact resume is saved in 🗂 My Resumes.")
                 st.rerun()
+
+        with d2:
+            st.markdown("**✉️ Reach a human**")
+            st.caption("We use contacts the employer **published**, and open a draft in "
+                       "*your* mail client. We don't scrape LinkedIn — that risks your "
+                       "account and cold blasts get binned anyway.")
+
+            found = og.contacts_from_jd(jd_text)
+            careers = conn.execute("SELECT careers_url FROM companies WHERE name=?",
+                                   (job["company"],)).fetchone()
+            domain = og.domain_for(job["company"], (careers[0] if careers else "") or "")
+
+            if found["emails"]:
+                st.success(f"📧 Published in the JD: {', '.join(found['emails'])}")
+            if found["names"]:
+                st.info(f"👤 Named in the JD: {', '.join(found['names'])}")
+            if not found["emails"] and not found["names"]:
+                st.caption("No contact published in this JD — use the LinkedIn "
+                           "searches below to find the recruiter, then connect "
+                           "with a short note.")
+
+            st.markdown("**Find them on LinkedIn** (you connect manually)")
+            for role in ("recruiter", "talent acquisition", "hiring manager"):
+                st.link_button(f"🔗 {role.title()} at {job['company'][:22]}",
+                               og.linkedin_search(job["company"], role),
+                               use_container_width=True)
+
+            with st.popover("🔍 Guess their email pattern", use_container_width=True):
+                st.caption(f"Corporate mail domain (guess): **{domain or 'unknown'}**")
+                gn1, gn2 = st.columns(2)
+                first = gn1.text_input("First name", key="og_first")
+                last = gn2.text_input("Last name", key="og_last")
+                if first and last and domain:
+                    st.caption("Likely address shapes — **verify before sending**, "
+                               "these are guesses, not confirmed addresses:")
+                    for e in og.email_patterns(first, last, domain):
+                        st.code(e, language=None)
+
+            fit_now = st.session_state.get("variants")
+            highlights = (fit_now[0]["scores"]["highlights"][:2] if fit_now
+                          else fit.get("highlights", [])[:2])
+            to = (found["emails"] or [""])[0]
+            nm = (found["names"] or [""])[0]
+            subj, body = og.draft_email(
+                name=nm, title="Senior Fraud & Credit Risk Data Analytics professional",
+                company=job["company"], job_title=job["title"],
+                highlights=highlights, job_url=job["url"])
+            with st.expander("✉️ Draft outreach email (you review & send)"):
+                subj = st.text_input("Subject", value=subj, key="og_subj")
+                body = st.text_area("Body", value=body, height=230, key="og_body")
+                to = st.text_input("To", value=to, key="og_to",
+                                   placeholder="recruiter@company.com")
+                if to:
+                    st.link_button("📨 Open in my mail app", og.mailto(to, subj, body),
+                                   use_container_width=True, type="primary")
+                    st.caption("Opens your own mail client, pre-filled and **unsent**. "
+                               "Read it, personalise the first line, then send.")
+                else:
+                    st.caption("Add a recipient to enable the draft.")
+
+# ── My Resumes: every version, with the job it was written for ──────────────
+with t_arch:
+    from src import resume as rz2, resume_store as rs2
+    ui.section("🗂 Resume archive",
+               "Every version you generated or edited, timestamped and tied to its "
+               "job. Months from now, when a recruiter calls, you'll know exactly "
+               "which resume they're holding.")
+
+    only_sent = st.toggle("Show only the ones I actually applied with", value=False)
+    rows = rs2.history(conn, applied_only=only_sent)
+    if not rows:
+        ui.empty("🗂", "No resumes archived yet",
+                 "Open Resume Studio → pick a job → Build resume versions. "
+                 "Every version is saved here automatically.")
+    else:
+        arch = pd.DataFrame([dict(r) for r in rows])
+        arch["sent"] = arch["used_to_apply"].map({1: "✅ sent", 0: ""})
+        show = arch[["id", "created_at", "sent", "applied_at", "company", "job_title",
+                     "variant", "overall", "ats", "recruiter", "hiring_manager"]]
+        ev2 = st.dataframe(
+            show, hide_index=True, use_container_width=True, height=340,
+            on_select="rerun", selection_mode="single-row",
+            column_config={
+                "id": st.column_config.NumberColumn("#", width="small"),
+                "created_at": st.column_config.TextColumn("Created"),
+                "applied_at": st.column_config.TextColumn("Applied"),
+                "job_title": st.column_config.TextColumn("Role", width="large"),
+                "overall": st.column_config.NumberColumn("Overall", format="%.1f"),
+                "ats": st.column_config.NumberColumn("ATS", format="%.1f"),
+                "recruiter": st.column_config.NumberColumn("Rec", format="%.1f"),
+                "hiring_manager": st.column_config.NumberColumn("HM", format="%.1f"),
+            }, key="arch_grid")
+        sel = ev2.selection.rows if ev2 and ev2.selection else []
+        if sel:
+            r = rs2.get(conn, int(arch.iloc[sel[0]]["id"]))
+            st.markdown(f"#### {r['variant']} — {r['job_title']} @ {r['company']}")
+            st.caption(f"Created {r['created_at']}"
+                       + (f" · applied {r['applied_at']}" if r["used_to_apply"] else ""))
+            if r["summary"]:
+                st.info(r["summary"])
+            html_v = rz2.tailored_resume_html(r["job_title"], r["company"],
+                                              summary_override=r["summary"] or "")
+            st.download_button("⬇ Download this exact resume", html_v,
+                               f"resume-{r['id']}.html", "text/html")
+            with st.expander("👁 Preview the resume as it was sent"):
+                components.html(html_v, height=520, scrolling=True)
+        st.download_button("⬇ Export archive (CSV)", arch.to_csv(index=False),
+                           "resume-archive.csv", "text/csv")
 
 # ── Companies ───────────────────────────────────────────────────────────────
 with t_co:
