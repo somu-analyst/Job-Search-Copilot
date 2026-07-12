@@ -120,6 +120,11 @@ def tailored_resume_html(job_title: str = "", company: str = "",
                          r"\1" + "\n" + summary_override.strip() + "\n" + r"\2",
                          md_text, count=1, flags=re.S)
     md_text = _ats_clean(md_text)
+    # Header fix: in cv.md the **title** line and the contact line are adjacent,
+    # so Markdown merges them into one paragraph that wraps mid-phrase. Force a
+    # hard break (two trailing spaces) after the first bold line that is
+    # immediately followed by a non-blank line, so they stack cleanly.
+    md_text = re.sub(r"(\*\*[^\n]+\*\*)\n(?=\S)", r"\1  \n", md_text, count=1)
     body = _md.markdown(md_text, extensions=["extra"])
     return (f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
             f"<title>Resume - {_ats_clean(job_title) or 'Master'}</title>"
