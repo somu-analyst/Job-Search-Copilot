@@ -1,10 +1,10 @@
 [theme]
-# Brand: indigo primary. The emerald accent (apply/success) is applied in CSS —
+# Brand: Glassdoor green. The Swiggy-orange Apply accent is applied in CSS —
 # Streamlit's theme block only supports a single primary colour.
-primaryColor = "#4F46E5"
+primaryColor = "#0CAA41"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F8FAFC"
-textColor = "#0F172A"
+secondaryBackgroundColor = "#F7FAF8"
+textColor = "#0E1A16"
 font = "sans serif"
 baseRadius = "0.75rem"
 
