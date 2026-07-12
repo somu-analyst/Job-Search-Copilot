@@ -1,12 +1,18 @@
-# Apply Jobs Guru
+# 🧭 Job Search Copilot
 
-A **local, token-free** BFSI job-discovery engine + application tracker, built for a
-fraud / credit-risk / analytics job search in the US (H-1B aware). It scrapes fresh
-postings from job boards **and directly from banks' Workday APIs**, auto-grows a
-directory of hiring companies, and gives you a Streamlit dashboard to track every
-application (new → applied → interview → offer).
+**Your AI job-search copilot — find · tailor · apply · track.** A **local, token-free**
+job-search automation tool: it discovers roles across 6 sources (Indeed, LinkedIn,
+Google, **direct Workday employer APIs**, Adzuna, Jooble), scores each against your
+resume, AI-tailors your resume per job, screens for visa/location deal-breakers, and
+tracks every application through a clean Streamlit dashboard.
 
-No API keys. No monthly fees. No cloud. Your data stays in `data/jobs.db`.
+Give it your resume + target keywords and it builds your whole pipeline. Generic and
+shareable — anyone can use it. No monthly fees, no cloud, no data leaves your machine
+(`data/jobs.db`). AI runs on free models (OpenRouter / Gemini).
+
+**What it automates:** discover → fit-score (1–10) → sponsorship/location screen →
+AI resume tailoring (with authenticity guard) → assisted apply (you press Submit) →
+track + follow-up reminders.
 
 ## Why the Workday lane matters
 Most scrapers only hit Indeed/LinkedIn (and get blocked by Glassdoor/ZipRecruiter).
