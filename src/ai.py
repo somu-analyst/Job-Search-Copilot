@@ -130,14 +130,28 @@ RESUME:
     return _json_block(_chat(prompt))
 
 
-def tailor_summary(url: str, title: str, company: str) -> str:
+_LEVELS = {
+    "Conservative": "Reword minimally — only reorder and lightly rephrase facts already "
+                    "in the summary to surface the most relevant ones first. Change as "
+                    "little as possible.",
+    "Balanced": "Emphasize the candidate's experience that best matches this job's "
+                "requirements, drawing only on facts stated anywhere in the resume.",
+    "Aggressive": "Strongly reframe the summary around this job's top requirements, "
+                  "foregrounding every relevant matching fact from the resume — but "
+                  "still use ONLY facts present in the resume; invent nothing.",
+}
+
+
+def tailor_summary(url: str, title: str, company: str, level: str = "Balanced") -> str:
     """Rewritten 4-line Professional Summary targeted at this job ('' on failure)."""
     jd = fetch_jd(url) or f"(Job title: {title} at {company})"
     resume = load_cv_md()
+    style = _LEVELS.get(level, _LEVELS["Balanced"])
     prompt = f"""Rewrite this resume's Professional Summary for the specific job below.
-Rules: max 4 lines, factual (use ONLY facts present in the resume — never invent),
-lead with the candidate's strongest matches to THIS job's requirements, plain text,
-no emojis, no buzzword padding. Respond with ONLY the rewritten summary text.
+Tailoring level: {level}. {style}
+Hard rules: max 4 lines; factual (use ONLY facts present in the resume — NEVER invent
+skills, numbers, employers, or titles); plain text; no emojis; no hype words
+(expert, world-class, guru, rockstar, 10x). Respond with ONLY the rewritten summary.
 
 JOB ({title} at {company}):
 {jd[:5000]}
@@ -151,6 +165,40 @@ RESUME:
     out = re.sub(r"^\s*#+.*\n", "", out)
     out = re.sub(r"^\s*(professional summary|summary)\s*:?\s*\n", "", out, flags=re.I)
     return out.strip() if len(out) < 1500 else out[:1500]
+
+
+def authenticity_check(tailored_summary: str, base_resume: str = "") -> list[str]:
+    """Guard against over-claiming: flag skills/numbers/hype in the tailored
+    summary that are NOT supported by the base resume. Empty list = clean."""
+    from .jd_match import SKILLS
+    base = (base_resume or load_cv_md()).lower()
+    tl = (tailored_summary or "").lower()
+    warns = []
+
+    added = [s.strip() for s in SKILLS
+             if s.strip() and s.strip() in tl and s.strip() not in base]
+    if added:
+        warns.append("Adds skills not found in your base resume — remove or verify: "
+                     + ", ".join(sorted(set(added))[:8]))
+
+    base_nums = set(re.findall(r"\d+\s?%|\$\s?\d[\d,.]*\s?[kmb]?", base))
+    tl_nums = set(re.findall(r"\d+\s?%|\$\s?\d[\d,.]*\s?[kmb]?", tl))
+    new_nums = tl_nums - base_nums
+    if new_nums:
+        warns.append("Introduces numbers/metrics not in your base resume — verify: "
+                     + ", ".join(sorted(new_nums)[:8]))
+
+    hype = ["expert", "world-class", "world class", "best-in-class", "guru", "ninja",
+            "rockstar", "unparalleled", "revolutionary", "10x", "visionary",
+            "genius", "unmatched", "flawless"]
+    found = [h for h in hype if h in tl]
+    if found:
+        warns.append("Overhyped language a recruiter distrusts — soften: " + ", ".join(found))
+
+    wc = len(tl.split())
+    if wc > 90:
+        warns.append(f"Summary is long ({wc} words) — trim to ~50-70 for a 6-second skim.")
+    return warns
 
 
 def tailor_summary_offline(url: str, title: str, company: str) -> str:
