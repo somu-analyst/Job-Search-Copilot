@@ -87,20 +87,23 @@ def trishool_layer(box: int, shaft: float = 0.42, color=ORANGE) -> Image.Image:
                (cx - bw * 0.42, base_y - w * 0.3),
                (cx - bw, belly)], fill=color)
 
-    # ── outer prongs: sweep OUT from the collar, then back IN to a point
+    # ── outer prongs: sweep OUT from the collar, then straighten UP so their
+    # points run PARALLEL to the central blade. All three prongs of a trishoolam
+    # face the same way — angling the tips outward made them read as backward
+    # hooks once the whole thing was rotated to fly sideways.
     for s in (-1, 1):
-        x0 = cx + s * B * 0.10          # leaves the collar
-        out_x = cx + s * B * 0.245      # widest point
-        tip_x = cx + s * B * 0.175      # curls back in
+        x0 = cx + s * B * 0.095         # leaves the collar
+        out_x = cx + s * B * 0.255      # control point: the belly of the curve
+        tip_x = cx + s * B * 0.195      # settles here, then runs straight up
         tip_y = base_y - head_h * 0.80
         path = _bez((x0, base_y),
-                    (out_x, base_y - head_h * 0.42),   # control: bulge outward
-                    (tip_x, tip_y + B * 0.05))
-        d.line(path, fill=color, width=int(w * 0.85), joint="curve")
-        # sharp point on the end, aimed up and slightly inward
-        d.polygon([(tip_x - s * B * 0.012, tip_y),
-                   (tip_x + s * B * 0.055, tip_y + B * 0.075),
-                   (tip_x - s * B * 0.052, tip_y + B * 0.062)], fill=color)
+                    (out_x, base_y - head_h * 0.30),
+                    (tip_x, tip_y + B * 0.085))
+        d.line(path, fill=color, width=int(w * 0.82), joint="curve")
+        # point aimed straight up, same direction as the central blade
+        d.polygon([(tip_x, tip_y),
+                   (tip_x - w * 0.85, tip_y + B * 0.085),
+                   (tip_x + w * 0.85, tip_y + B * 0.085)], fill=color)
     return L
 
 
@@ -131,26 +134,29 @@ def opt_archer(size=S):
     aim_y = S_ * 0.50
 
     tip_t, tip_b, grip = _bow(
-        d, S_, (S_ * 0.42, S_ * 0.15, S_ * 0.68, S_ * 0.85), aim_y, w)
+        d, S_, (S_ * 0.40, S_ * 0.16, S_ * 0.62, S_ * 0.84), aim_y, w)
 
-    draw_hand = (S_ * 0.305, aim_y)
+    draw_hand = (S_ * 0.285, aim_y)
     sw = max(2, int(w * 0.42))
     d.line([tip_t, draw_hand], fill=CREAM, width=sw)     # string, drawn back
     d.line([tip_b, draw_hand], fill=CREAM, width=sw)
 
-    _paste_trishool(img, int(S_ * 0.62), S_ * 0.63, aim_y, rot=-90, shaft=0.50)
+    # Trishoolam nocked on the string: shaft reaches back to the draw hand, head
+    # clears the bow on the far side — the way a nocked arrow actually sits.
+    # Oversizing it made the head swallow the bow.
+    _paste_trishool(img, int(S_ * 0.58), S_ * 0.605, aim_y, rot=-90, shaft=0.56)
 
     d = ImageDraw.Draw(img)                              # redraw over the layer
-    hx, hy, hr = S_ * 0.205, S_ * 0.295, S_ * 0.070
+    hx, hy, hr = S_ * 0.170, S_ * 0.300, S_ * 0.068
     d.ellipse([hx - hr, hy - hr, hx + hr, hy + hr], fill=CREAM)
-    sh, hip = (S_ * 0.215, S_ * 0.405), (S_ * 0.205, S_ * 0.625)
+    sh, hip = (S_ * 0.180, S_ * 0.405), (S_ * 0.175, S_ * 0.630)
     d.line([sh, hip], fill=CREAM, width=int(limb * 1.8))
     d.line([sh, grip], fill=CREAM, width=int(limb))      # locked-out bow arm
-    elbow = (S_ * 0.105, S_ * 0.455)                     # elbow behind the body
+    elbow = (S_ * 0.080, S_ * 0.460)                     # elbow behind the body
     d.line([sh, elbow], fill=CREAM, width=int(limb))
     d.line([elbow, draw_hand], fill=CREAM, width=int(limb))
-    d.line([hip, (S_ * 0.315, S_ * 0.855)], fill=CREAM, width=int(limb))
-    d.line([hip, (S_ * 0.095, S_ * 0.855)], fill=CREAM, width=int(limb))
+    d.line([hip, (S_ * 0.285, S_ * 0.870)], fill=CREAM, width=int(limb))
+    d.line([hip, (S_ * 0.070, S_ * 0.870)], fill=CREAM, width=int(limb))
     return img
 
 
