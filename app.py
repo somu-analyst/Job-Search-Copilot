@@ -81,6 +81,15 @@ st.markdown("""
 [data-testid="stExpander"]{border:1px solid var(--line);border-radius:12px;
   background:#fff;}
 h2,h3{color:var(--navy);}
+h4{color:var(--blue);font-weight:700;margin-top:8px;}
+h5{color:var(--navy);font-weight:700;}
+.stTextInput input,.stSelectbox div[data-baseweb="select"]>div,
+.stMultiSelect div[data-baseweb="select"]>div{border-radius:8px;}
+.stSelectbox label,.stTextInput label,.stMultiSelect label,
+.stSlider label,.stCheckbox label{font-weight:600;color:#3d4d5e;}
+[data-testid="stCode"]{border-radius:9px;border:1px solid var(--line);}
+.stLinkButton>a{border-radius:9px;font-weight:600;}
+hr{margin:10px 0;border-color:var(--line);}
 </style>
 """, unsafe_allow_html=True)
 
@@ -340,24 +349,67 @@ with tab_applied:
 # ── Resume & Apply tab ──────────────────────────────────────────────────────
 with tab_resume:
     from src import resume as rz
-    st.caption("Pick a job → get a tailored resume (HTML → print to PDF), a merged "
-               "cover letter, and copy-paste blocks for the application form. "
-               "All token-free; optional AI tailoring via career-ops queue.")
+    st.markdown("### 📄 Resume & Apply Center")
+    st.caption("**Step 1 — find your job** (filter, then pick from the dropdown). "
+               "Then get fit scores, a tailored ATS resume, cover letter, apply kit, "
+               "and one-click assisted apply.")
 
-    jobs_pick = load("""SELECT url, title, company, score FROM jobs
-                        WHERE status NOT IN ('skip','stale','rejected')
-                        ORDER BY score DESC, date_found DESC LIMIT 300""")
+    # ── Step 1: narrowing filters, then the picker ────────────────────────
+    fc1, fc2, fc3 = st.columns([2, 1.3, 1])
+    with fc1:
+        pick_search = st.text_input("🔎 Filter jobs by title or company",
+                                    placeholder="e.g. fraud, credit risk, Citi…",
+                                    key="pick_search")
+    with fc2:
+        pick_ind = st.selectbox("Industry", ["All"] + [r[0] for r in conn.execute(
+            "SELECT DISTINCT industry FROM companies WHERE industry != '' ORDER BY 1")],
+            key="pick_ind")
+    with fc3:
+        pick_fire = st.checkbox("🔥 Must-apply only", key="pick_fire")
+
+    pq = """SELECT jobs.url AS url, jobs.title AS title, jobs.company AS company,
+                   jobs.score AS score, jobs.location AS location,
+                   COALESCE(companies.industry,'') AS industry, jobs.status AS status
+            FROM jobs LEFT JOIN companies ON jobs.company = companies.name
+            WHERE jobs.status NOT IN ('skip','stale','rejected')"""
+    pp = []
+    if pick_search:
+        pq += " AND (LOWER(jobs.title) LIKE ? OR LOWER(jobs.company) LIKE ?)"
+        pp += [f"%{pick_search.lower()}%"] * 2
+    if pick_ind != "All":
+        pq += " AND companies.industry = ?"; pp.append(pick_ind)
+    if pick_fire:
+        pq += " AND jobs.score >= 8"
+    pq += " ORDER BY jobs.score DESC, jobs.date_found DESC LIMIT 300"
+    jobs_pick = load(pq, pp)
+
     if jobs_pick.empty:
-        st.info("No jobs available — run a scan first.")
+        st.info("No jobs match those filters — loosen them or run a scan.")
     else:
-        labels = [f"{r.score:.1f}/10 — {r.title[:70]} @ {r.company}"
+        st.markdown(f"**{len(jobs_pick)} matching jobs** — choose one below ⬇️")
+        labels = [f"{'🔥 ' if r.score >= 8 else ''}{r.score:.1f}/10  •  {r.title[:64]}  •  {r.company}"
                   for r in jobs_pick.itertuples()]
-        idx = st.selectbox("Job to apply for", range(len(labels)),
-                           format_func=lambda i: labels[i])
+        idx = st.selectbox("🎯 Job to apply for", range(len(labels)),
+                           format_func=lambda i: labels[i], key="pick_job")
         job = jobs_pick.iloc[idx]
-        st.link_button("↗ Open job posting", job["url"])
+
+        # ── Styled job header card ────────────────────────────────────────
+        fire = "🔥 MUST APPLY" if job["score"] >= 8 else ""
+        st.markdown(f"""
+<div style="background:#fff;border:1px solid #e3e9f0;border-left:5px solid #0f5ea8;
+     border-radius:12px;padding:16px 20px;margin:8px 0 14px;
+     box-shadow:0 2px 8px rgba(16,40,70,.06)">
+  <div style="font-size:18px;font-weight:700;color:#0f2a4a">{job['title']}</div>
+  <div style="color:#5b6b7d;margin-top:3px">
+     🏢 {job['company']} &nbsp;·&nbsp; 📍 {job['location'] or 'n/a'}
+     &nbsp;·&nbsp; {job['industry'] or 'BFSI'} &nbsp;·&nbsp;
+     <b style="color:#0f5ea8">{job['score']:.1f}/10 fit</b>
+     &nbsp; <span style="color:#c0392b;font-weight:700">{fire}</span></div>
+</div>""", unsafe_allow_html=True)
+        st.link_button("↗ Open the job posting", job["url"], use_container_width=False)
 
         # ── Position-fit analysis (JD fetched from Workday API when possible) ──
+        st.markdown("#### Step 2 — Fit scores")
         from src import jd_match
         with st.spinner("Analyzing position fit vs your resume..."):
             fit = jd_match.analyze(job["url"], job["title"])
@@ -391,6 +443,7 @@ with tab_resume:
         st.caption("Keyword-based estimate ($0).")
 
         # ── AI deep analysis + AI tailoring (free OpenRouter models) ──────
+        st.markdown("#### Step 3 — AI deep-dive & tailoring")
         a1, a2 = st.columns(2)
         with a1:
             if st.button("🤖 AI deep analysis (free model, ~30s)", use_container_width=True):
@@ -454,9 +507,11 @@ with tab_resume:
                                html_ai, f"resume-ai-{_slug(job['company'])[:28]}.html",
                                "text/html", use_container_width=True, type="primary")
 
+        st.divider()
+        st.markdown("#### Step 4 — Get your documents & apply")
         colL, colR = st.columns(2)
         with colL:
-            st.subheader("📄 ATS-clean resume")
+            st.markdown("##### 📄 ATS-clean resume")
             st.caption("Emoji-free, plain formatting — safe for every ATS parser.")
             html_doc = rz.tailored_resume_html(job["title"], job["company"])
             from src.sources import slugify
@@ -471,7 +526,7 @@ with tab_resume:
             with st.expander("Preview tailored resume"):
                 components.html(html_doc, height=600, scrolling=True)
         with colR:
-            st.subheader("⚡ Apply kit — copy/paste blocks")
+            st.markdown("##### ⚡ Apply kit — copy/paste blocks")
             for label, text in rz.apply_kit().items():
                 st.caption(label)
                 st.code(text, language=None)
