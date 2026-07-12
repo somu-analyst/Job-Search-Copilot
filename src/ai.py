@@ -27,19 +27,21 @@ MODELS = ["qwen/qwen3-next-80b-a3b-instruct:free",
 _model_cache: list[str] = []
 
 
+_SLOW = ("405b", "70b", "72b", "lyria", "image", "vision", "qwq", "reasoning",
+         "thinking", "r1")  # giant/slow/rate-limited models — skip for speed
+
+
 def _free_models() -> list[str]:
-    """Every free (:free) text model live on OpenRouter — maximizes the number
-    of fallbacks so a per-model rate-limit rarely exhausts all options."""
+    """Fast free (:free) text models on OpenRouter, known-good ones first.
+    Excludes giant/slow models that dominate rate-limits and add latency."""
     global _model_cache
     if _model_cache:
         return _model_cache
     try:
-        r = requests.get(MODELS_URL, timeout=15)
+        r = requests.get(MODELS_URL, timeout=12)
         ids = [m["id"] for m in r.json().get("data", [])
                if m.get("id", "").endswith(":free")
-               and "image" not in m.get("id", "")
-               and "lyria" not in m.get("id", "")]
-        # keep the known-good ones first, then the rest
+               and not any(s in m["id"].lower() for s in _SLOW)]
         ordered = [m for m in MODELS if m in ids] + [m for m in ids if m not in MODELS]
         _model_cache = ordered or MODELS
     except Exception:
@@ -109,17 +111,18 @@ def last_error() -> str:
     return _last_error
 
 
-def _chat(prompt: str, max_tokens=1400, passes=3) -> str:
-    """Try every free model; repeat the sweep `passes` times before giving up.
-    Free models are frequently busy (429) or return empty — retrying clears it."""
+def _chat(prompt: str, max_tokens=1400, passes=2) -> str:
+    """Try the best free models; repeat the sweep `passes` times before giving up.
+    Capped to the top few models with a short timeout so it stays fast even when
+    the free tier is busy (falls through to Gemini, then gives up gracefully)."""
     global _last_error
     _last_error = ""
     key = _key()
-    models = _free_models() if key else []
+    models = _free_models()[:6] if key else []   # best 6 only → fast
     for attempt in range(passes):
         for model in models:
             try:
-                r = requests.post(API, timeout=90,
+                r = requests.post(API, timeout=40,
                                   headers={"Authorization": f"Bearer {key}",
                                            "Content-Type": "application/json"},
                                   json={"model": model, "max_tokens": max_tokens,
@@ -138,7 +141,7 @@ def _chat(prompt: str, max_tokens=1400, passes=3) -> str:
                 _last_error = f"{model}: {type(e).__name__}"
                 continue
         if attempt < passes - 1:
-            time.sleep(4)
+            time.sleep(1.5)
     # OpenRouter exhausted/absent → try Gemini's separate free quota
     g = _gemini_chat(prompt, max_tokens)
     if g:
