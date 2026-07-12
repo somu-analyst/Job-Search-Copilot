@@ -119,7 +119,7 @@ def job_dialog(row: dict):
     st.markdown(ui.chips([
         (f"{row['score']:.1f}/10 fit", ui.score_kind(row["score"])),
         ("MUST APPLY", "w") if row["score"] >= MUST_APPLY_AT else ("", ""),
-        (row.get("salary") or "", "a"),
+        (row.get("salary") or "", "p"),
         (row.get("source") or "", "n"),
     ]), unsafe_allow_html=True)
 

@@ -25,7 +25,11 @@ def hero(title: str, subtitle: str, kicker: str = "") -> None:
 
 # ── Chips ───────────────────────────────────────────────────────────────────
 def chip(text: str, kind: str = "n") -> str:
-    """Inline tag. kind: p=brand, a=good, w=warn, d=risk, n=neutral."""
+    """Inline tag. kind: p=brand green, w=amber signal, d=risk, n=neutral.
+
+    NOTE the deliberate omission: chips never use the orange accent ('a').
+    Orange means Apply, and only Apply — the moment a salary chip is also orange,
+    the button stops being the one loud thing on the screen."""
     return f"<span class='chip chip-{kind}'>{_esc(text)}</span>"
 
 
@@ -36,9 +40,9 @@ def chips(items: list[tuple[str, str]]) -> str:
 def score_kind(score: float) -> str:
     """Colour a fit score by band, consistently everywhere."""
     if score >= 8:
-        return "w"      # amber = must-apply
+        return "w"      # amber = must-apply signal
     if score >= 6:
-        return "a"      # emerald = strong
+        return "p"      # green = strong fit
     return "n"
 
 
@@ -52,7 +56,7 @@ def job_card(title: str, company: str, location: str, score: float,
     if hot:
         tags.append(("MUST APPLY", "w"))
     if salary:
-        tags.append((salary, "a"))
+        tags.append((salary, "p"))
     if industry:
         tags.append((industry, "n"))
     if sponsor and sponsor.lower().startswith("strong"):
