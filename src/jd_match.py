@@ -73,10 +73,13 @@ def fetch_jd(url: str) -> str:
 
 
 def _resume_text() -> str:
+    from pathlib import Path
     txt = load_cv_md()
-    digest = careerops_dir() / "article-digest.md"
-    if digest.exists():
-        txt += "\n" + digest.read_text(encoding="utf-8")
+    for digest in (Path(__file__).resolve().parent.parent / "resume" / "article-digest.md",
+                   careerops_dir() / "article-digest.md"):
+        if digest.exists():
+            txt += "\n" + digest.read_text(encoding="utf-8")
+            break
     return txt.lower()
 
 
@@ -93,28 +96,32 @@ def analyze(url: str, title: str) -> dict:
     jd_skills = _hits(jd, SKILLS) if jd else _hits(title, SKILLS)
     have = {k for k in jd_skills if k.strip() in resume}
     missing = sorted(jd_skills - have)
+    coverage = len(have) / len(jd_skills) if jd_skills else 0.5   # 0..1
 
-    # ATS: pure keyword coverage
-    ats = 10 * len(have) / len(jd_skills) if jd_skills else 5.0
+    # broad title-word overlap with the resume (not just tech tokens)
+    stop = {"and", "the", "of", "for", "senior", "lead", "analyst", "manager",
+            "vp", "svp", "associate", "director", "officer", "specialist",
+            "junior", "sr", "jr", "hybrid", "remote"}
+    title_words = {w for w in re.findall(r"[a-z]{3,}", title.lower()) if w not in stop}
+    title_overlap = (sum(1 for w in title_words if w in resume) / len(title_words)
+                     if title_words else 0.5)
 
-    # Recruiter: title terms + headline skills coverage
-    title_terms = _hits(title, SKILLS)
-    title_have = {k for k in title_terms if k in resume}
-    recruiter = 10 * (0.6 * (len(title_have) / len(title_terms) if title_terms else 0.5)
-                      + 0.4 * (len(have) / len(jd_skills) if jd_skills else 0.5))
-
-    # Hiring manager: domain depth + quantified achievements
+    # domain-depth coverage + quantified-achievement density
     jd_deep = jd_skills & set(DOMAIN_DEEP)
-    deep_have = {k for k in jd_deep if k in resume}
-    metrics_bonus = 1.0 if len(re.findall(r"\d+%|\$\d", resume)) >= 5 else 0.5
-    hm = 10 * (0.7 * (len(deep_have) / len(jd_deep) if jd_deep else 0.6)
-               + 0.3 * metrics_bonus)
+    deep_cov = (len({k for k in jd_deep if k in resume}) / len(jd_deep)) if jd_deep else 0.6
+    metrics = min(1.0, len(re.findall(r"\d+%|\$\d", resume)) / 8)
+
+    # all floored at 2/10 so a transferable candidate never reads as "zero"
+    ats = 2 + 8 * coverage
+    recruiter = 2 + 8 * (0.55 * title_overlap + 0.45 * coverage)
+    hm = 2 + 8 * (0.6 * deep_cov + 0.4 * metrics)
+    overall = 0.35 * ats + 0.3 * recruiter + 0.35 * hm
 
     out.update({
         "ats": round(min(10, ats), 1),
         "recruiter": round(min(10, recruiter), 1),
         "hiring_manager": round(min(10, hm), 1),
-        "overall": round(min(10, 0.4 * ats + 0.3 * recruiter + 0.3 * hm), 1),
+        "overall": round(min(10, overall), 1),
         "highlights": sorted(have),
         "missing": missing,
     })

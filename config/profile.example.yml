@@ -1,9 +1,21 @@
 # bfsi-job-hunter — your search config. Edit freely; no code changes needed.
 
 candidate:
-  name: "Srinivasa Rao Somu"
+  name: "Your Name"
+  full_name: "Your Name"
+  email: "you@example.com"
+  phone: "(555) 555-5555"
+  linkedin: "linkedin.com/in/you"
   location: "NJ, USA"
   visa: "H-1B (needs sponsorship — prioritize sponsor-history employers)"
+
+narrative:
+  headline: "Senior Fraud & Credit Risk Data Analytics leader — 13+ yrs across Wells Fargo, Citi, HSBC, IBM"
+  exit_story: "13+ years up the risk-analytics stack in tier-1 banks, now pairing deep SAS/Viya/Python/SQL domain depth with GenAI-accelerated delivery."
+  superpowers:
+    - "Fraud/AML model remediation & alert-accuracy tuning (12% lift, 300+ escalations/mo)"
+    - "Regulatory analytics: CCAR/ICAAP, CECL, PD/LGD/EAD — led a team of 4 at Citi"
+    - "SAS-to-Viya migration & production pipelines (~80% faster runtimes, 40% ETL cut)"
 
 location:
   search: "United States"      # location string passed to the board scrapers
@@ -62,9 +74,9 @@ filters:
 
 # Free aggregator API keys (optional — sources are skipped if absent)
 api_keys:
-  adzuna_app_id: ""      # free instant signup: https://developer.adzuna.com
+  adzuna_app_id: ""
   adzuna_app_key: ""
-  jooble_key: ""         # free key by email: https://jooble.org/api/about
+  jooble_key: ""   # 500-request default limit
 
 scrape:
   board_sites: [indeed, linkedin, google]   # ziprecruiter/glassdoor block scrapers

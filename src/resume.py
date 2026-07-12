@@ -37,29 +37,48 @@ def _cfg() -> dict:
     return {}
 
 
+_LOCAL_CV = Path(__file__).resolve().parent.parent / "resume" / "cv.md"
+
+
 def careerops_dir() -> Path:
     return Path(_cfg().get("resume", {}).get("careerops_dir", _DEFAULT_CO))
 
 
 def cv_path() -> Path:
-    return Path(_cfg().get("resume", {}).get("cv_path", careerops_dir() / "cv.md"))
+    """Resolve the resume file. Priority:
+    1. resume.cv_path in config/profile.yml (explicit override)
+    2. ./resume/cv.md  (this repo — where any user drops their own)
+    3. career-ops/cv.md (if this is running alongside career-ops)
+    """
+    cfg = _cfg().get("resume", {}).get("cv_path", "")
+    if cfg:
+        return Path(cfg)
+    if _LOCAL_CV.exists():
+        return _LOCAL_CV
+    return careerops_dir() / "cv.md"
 
 
 def load_cv_md() -> str:
     p = cv_path()
     if p.exists():
         return p.read_text(encoding="utf-8")
-    return "# Resume not found\nSet resume.cv_path in config/profile.yml"
+    return ("# Add your resume\nSave your resume as Markdown to `resume/cv.md` "
+            "(or set resume.cv_path in config/profile.yml).")
 
 
 def load_co_profile() -> dict:
+    """Candidate/narrative data. Prefers this repo's config/profile.yml
+    ('candidate:' block); falls back to a co-located career-ops profile."""
+    local = _cfg()
+    if local.get("candidate"):
+        return local
     p = careerops_dir() / "config" / "profile.yml"
     if yaml and p.exists():
         try:
             return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         except Exception:
             return {}
-    return {}
+    return local
 
 
 _STYLE = """
