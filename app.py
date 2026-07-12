@@ -10,10 +10,33 @@ Three tabs:
 
 Reads/writes data/jobs.db. No API key, fully local.
 """
+import re
 import sqlite3
+from datetime import date
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+
+
+def posted_days_ago(s) -> int | None:
+    """Normalize messy date_posted ('Posted 3 Days Ago', '2026-07-10') to days."""
+    s = str(s or "").strip().lower()
+    if not s or s == "none" or s == "nan":
+        return None
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        try:
+            return (date.today() - date(int(m[1]), int(m[2]), int(m[3]))).days
+        except ValueError:
+            return None
+    if "today" in s or "just posted" in s:
+        return 0
+    if "yesterday" in s:
+        return 1
+    m = re.search(r"(\d+)\+?\s*day", s)
+    if m:
+        return int(m.group(1))
+    return None
 
 from src import db
 
@@ -51,6 +74,7 @@ def _post_process():
     from src import score, sponsors
     score.score_all(conn, verbose=False)
     sponsors.enrich_seeds(conn)
+    db.enrich_industries(conn)
     db.archive_stale(conn)
 
 
@@ -121,6 +145,9 @@ with tab_jobs:
             AGE_OPTS = {"Any time": None, "Today": 0, "1 day": 1, "3 days": 3,
                         "1 week": 7, "2 weeks": 14, "1 month": 30}
             age_f = st.selectbox("Freshness (pulled)", list(AGE_OPTS), index=0)
+            posted_f = st.selectbox("Posted age (from source)", list(AGE_OPTS), index=0,
+                                    help="Uses the job board's own posted date; "
+                                         "jobs with no posted date always pass")
         with f2:
             min_score = st.slider("Min score (1–10)", 1.0, 10.0, 1.0, 0.5)
             must_only = st.checkbox(f"🔥 Must-apply only (≥ {MUST_APPLY_AT:.0f})")
@@ -130,18 +157,25 @@ with tab_jobs:
             company_f = st.multiselect("Company", companies_all)
             source_f = st.multiselect("Source", [r[0] for r in conn.execute(
                 "SELECT DISTINCT source FROM jobs")])
+            industry_f = st.multiselect("Industry", [r[0] for r in conn.execute(
+                "SELECT DISTINCT industry FROM companies WHERE industry != '' ORDER BY 1")])
         with f4:
             kw = st.text_input("Search title/company")
             core_only = st.checkbox("Core-fit ★ only")
 
-    q = """SELECT rowid, url, title, company, location, score, date_posted,
-                  date_found, source, is_core, status, notes, date_applied
-           FROM jobs WHERE score >= ?"""
+    q = """SELECT jobs.rowid AS rowid, url, title, jobs.company AS company,
+                  COALESCE(companies.industry,'') AS industry,
+                  location, score, date_posted, date_found, source, is_core,
+                  status, notes, date_applied
+           FROM jobs LEFT JOIN companies ON jobs.company = companies.name
+           WHERE score >= ?"""
     p = [must_only and MUST_APPLY_AT or min_score]
+    if industry_f:
+        q += f" AND companies.industry IN ({','.join('?'*len(industry_f))})"; p += industry_f
     if status_f:
         q += f" AND status IN ({','.join('?'*len(status_f))})"; p += status_f
     if company_f:
-        q += f" AND company IN ({','.join('?'*len(company_f))})"; p += company_f
+        q += f" AND jobs.company IN ({','.join('?'*len(company_f))})"; p += company_f
     if source_f:
         q += f" AND source IN ({','.join('?'*len(source_f))})"; p += source_f
     if core_only:
@@ -153,6 +187,10 @@ with tab_jobs:
         q += " AND date_found >= date('now', ?)"; p.append(f"-{days} days")
     q += " ORDER BY score DESC, date_found DESC"
     df = load(q, p)
+    pmax = AGE_OPTS[posted_f]
+    if pmax is not None and not df.empty:
+        pd_days = df["date_posted"].map(posted_days_ago)
+        df = df[(pd_days.isna()) | (pd_days <= pmax)].reset_index(drop=True)
 
     st.caption(f"{len(df)} jobs — set **Status** to `applied` and it moves to the "
                f"✅ Applied tab with today's date. 🔥 = must apply (score ≥ {MUST_APPLY_AT:.0f}).")
@@ -235,15 +273,13 @@ with tab_resume:
         idx = st.selectbox("Job to apply for", range(len(labels)),
                            format_func=lambda i: labels[i])
         job = jobs_pick.iloc[idx]
-        kws = rz.matched_keywords_for(job["title"])
         st.link_button("↗ Open job posting", job["url"])
 
         colL, colR = st.columns(2)
         with colL:
-            st.subheader("📄 Tailored resume")
-            if kws:
-                st.write("Alignment keywords: " + ", ".join(kws))
-            html_doc = rz.tailored_resume_html(job["title"], job["company"], kws)
+            st.subheader("📄 ATS-clean resume")
+            st.caption("Emoji-free, plain formatting — safe for every ATS parser.")
+            html_doc = rz.tailored_resume_html(job["title"], job["company"])
             from src.sources import slugify
             st.download_button("⬇ Download resume (HTML → Ctrl+P → PDF)",
                                html_doc, f"resume-{slugify(job['company'])[:30]}.html",
@@ -271,8 +307,8 @@ with tab_resume:
 # ── Companies tab ───────────────────────────────────────────────────────────
 with tab_co:
     st.caption("Auto-grows every scan. Careers pages let you check a company directly, even when boards miss it.")
-    co = load("""SELECT name, job_count, careers_url, workday_url, sponsors_h1b,
-                        first_seen, last_seen, notes
+    co = load("""SELECT name, industry, job_count, careers_url, workday_url,
+                        sponsors_h1b, first_seen, last_seen, notes
                  FROM companies ORDER BY job_count DESC, last_seen DESC""")
     kw2 = st.text_input("Filter companies")
     if kw2:

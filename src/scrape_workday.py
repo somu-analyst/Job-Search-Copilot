@@ -29,11 +29,34 @@ TENANTS = [
     ("State Street",    "statestreet.wd1.myworkdayjobs.com", "statestreet", "Global"),
     ("FIS",             "fis.wd5.myworkdayjobs.com",         "fis",         "SearchJobs"),
     ("Nasdaq",          "nasdaq.wd1.myworkdayjobs.com",      "nasdaq",      "Global_External_Site"),
+    ("Truist",          "truist.wd1.myworkdayjobs.com",      "truist",      "Careers"),
+    ("Fifth Third",     "fifththird.wd5.myworkdayjobs.com",  "fifththird",  "53careers"),
+    ("KeyBank",         "keybank.wd5.myworkdayjobs.com",     "keybank",     "External_Career_Site"),
+    ("Huntington",      "huntington.wd12.myworkdayjobs.com", "huntington",  "HNBcareers"),
+    ("Fannie Mae",      "fanniemae.wd1.myworkdayjobs.com",   "fanniemae",   "FannieMaeCareers"),
+    ("TransUnion",      "transunion.wd5.myworkdayjobs.com",  "transunion",  "TransUnion"),
+    ("Newrez",          "newrez.wd1.myworkdayjobs.com",      "newrez",      "NRZ"),
+    ("MUFG",            "mufgub.wd3.myworkdayjobs.com",      "mufgub",      "MUFG-Careers"),
+    ("Mizuho Americas", "mizuho.wd1.myworkdayjobs.com",      "mizuho",      "mizuhoamericas"),
+    ("Travelers",       "travelers.wd5.myworkdayjobs.com",   "travelers",   "External"),
+    ("Nationwide",      "nationwide.wd1.myworkdayjobs.com",  "nationwide",  "Nationwide_Career"),
+    ("GEICO",           "geico.wd1.myworkdayjobs.com",       "geico",       "External"),
+    ("Prudential/PGIM", "pru.wd5.myworkdayjobs.com",         "pru",         "Careers"),
+    ("AIG",             "aig.wd1.myworkdayjobs.com",         "aig",         "aig"),
+    ("Voya",            "godirect.wd5.myworkdayjobs.com",    "godirect",    "voya_jobs"),
+    ("MassMutual",      "massmutual.wd1.myworkdayjobs.com",  "massmutual",  "MMAscendCareers"),
+    ("The Hartford",    "thehartford.wd5.myworkdayjobs.com", "thehartford", "Careers_External"),
+    ("Vanguard",        "vanguard.wd5.myworkdayjobs.com",    "vanguard",    "vanguard_external"),
+    ("BlackRock",       "blackrock.wd1.myworkdayjobs.com",   "blackrock",   "BlackRock_Professional"),
+    ("Raymond James",   "raymondjames.wd1.myworkdayjobs.com","raymondjames","RaymondJamesCareers"),
+    ("Ameriprise",      "ameriprise.wd5.myworkdayjobs.com",  "ameriprise",  "Ameriprise"),
 ]
 
 # Search terms sent to each tenant's API (broad; title filter does the rest)
 WD_TERMS = ["fraud", "AML", "credit risk", "compliance", "risk analytics",
-            "SAS", "data analytics", "CCAR", "financial crime", "reporting"]
+            "SAS", "data analytics", "CCAR", "financial crime", "reporting",
+            "SQL", "Python", "Tableau", "data governance", "KYC",
+            "regulatory reporting"]
 
 HDR = {"Content-Type": "application/json", "Accept": "application/json",
        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}

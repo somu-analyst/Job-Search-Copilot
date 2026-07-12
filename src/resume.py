@@ -77,24 +77,27 @@ p{margin:4px 0} strong{color:#0f2a4a}
 """
 
 
-def tailored_resume_html(job_title: str = "", company: str = "",
-                         matched_keywords: list[str] | None = None) -> str:
-    """Master resume → standalone ATS-safe HTML, with an optional target banner."""
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002190-\U000027BF\U0001F900-\U0001F9FF"
+    "\U00002B00-\U00002BFF\U0000FE00-\U0000FE0F\U0001F1E6-\U0001F1FF]+")
+
+
+def _ats_clean(text: str) -> str:
+    """Strip emojis/symbols ATS parsers choke on; tidy leftover separators."""
+    text = _EMOJI_RE.sub("", text)
+    text = text.replace("·", "|").replace("★", "").replace("→", "-")
+    return re.sub(r"[ \t]{2,}", " ", text)
+
+
+def tailored_resume_html(job_title: str = "", company: str = "") -> str:
+    """Master resume → standalone ATS-safe HTML (no emojis, no gimmicks)."""
     md_text = load_cv_md()
-    # strip html comments (TODO markers etc.)
+    # strip html comments (TODO markers etc.) and emoji
     md_text = re.sub(r"<!--.*?-->", "", md_text, flags=re.S)
+    md_text = _ats_clean(md_text)
     body = _md.markdown(md_text, extensions=["extra"])
-    banner = ""
-    if job_title:
-        kws = ", ".join(matched_keywords or [])
-        banner = (f'<div class="target"><b>Target Role:</b> {job_title}'
-                  + (f" — {company}" if company else "")
-                  + (f"<br><b>Alignment:</b> {kws}" if kws else "") + "</div>")
-        # place banner right after the contact line (first <p> after <h1>)
-        parts = body.split("</p>", 1)
-        body = (parts[0] + "</p>" + banner + parts[1]) if len(parts) == 2 else banner + body
     return (f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
-            f"<title>Resume — {job_title or 'Master'}</title>"
+            f"<title>Resume - {_ats_clean(job_title) or 'Master'}</title>"
             f"<style>{_STYLE}</style></head><body>{body}</body></html>")
 
 

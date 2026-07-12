@@ -24,6 +24,14 @@ filters:
     - "banking analytics consultant"
     - "financial services data analytics"
     - "BFSI analytics"
+    - "SAS programmer analyst"
+    - "SQL data analyst banking"
+    - "Python data analyst financial services"
+    - "Tableau developer banking"
+    - "compliance analyst bank"
+    - "regulatory reporting analyst"
+    - "KYC AML analyst"
+    - "MIS reporting analyst banking"
 
   # A title must contain >=1 positive and 0 negative keywords to be kept
   positive:
@@ -37,7 +45,8 @@ filters:
      decision science, data scientist, sas, reporting, mis, data engineer, etl,
      consultant, advisory, consulting, data management, data governance,
      data quality, data steward, master data, metadata, data lineage, insights,
-     data strategy, migration, modernization, remediation]
+     data strategy, migration, modernization, remediation,
+     sql, python, tableau, power bi, viya]
 
   negative:
     [junior, intern, entry level, ios, android, frontend, front end, php, ruby,
