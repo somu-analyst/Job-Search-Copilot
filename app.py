@@ -128,7 +128,7 @@ def job_dialog(row: dict):
     from src import jd_match as jdm
     st.markdown(f"### {row['title']}")
     st.caption(f"{row['company']} · {row['location'] or '—'} · "
-               f"{row.get('industry') or 'BFSI'}")
+               f"{row.get('industry') or '—'}")
     st.markdown(ui.chips([
         (f"{row['score']:.1f}/10 fit", ui.score_kind(row["score"])),
         ("MUST APPLY", "w") if row["score"] >= MUST_APPLY_AT else ("", ""),
@@ -274,7 +274,7 @@ n_link = conn.execute(
     "SELECT COUNT(*) FROM jobs WHERE COALESCE(apply_url,'') != ''").fetchone()[0]
 
 ui.hero("Job Search Copilot",
-        "Finds BFSI roles across every source, scores them against your resume, "
+        "Finds roles across every source, scores them against your resume, "
         "tailors it per job, and links you straight to the employer's own "
         "application page — never a reposter.",
         kicker="find · tailor · apply · track",
@@ -292,9 +292,9 @@ with st.sidebar:
     st.subheader("⚡ Run a scan")
     st.caption("Scrape → filter → dedupe → score → sponsor-tag → resolve apply "
                "links. Token-free.")
-    if st.button("🏦 Quick — Workday banks", use_container_width=True):
+    if st.button("⚡ Quick — Workday employers", use_container_width=True):
         from src import scrape_workday
-        with st.status("Scanning bank Workday APIs…", expanded=True) as s:
+        with st.status("Scanning employer Workday APIs…", expanded=True) as s:
             n = scrape_workday.run(conn, verbose=False)
             st.write(f"Workday: **+{n}** new")
             _post_process()
@@ -306,7 +306,7 @@ with st.sidebar:
             st.write("1/3 Job boards…")
             nb = scrape_boards.run(conn, verbose=False)
             st.write(f"Boards: **+{nb}**")
-            st.write("2/3 Workday bank APIs…")
+            st.write("2/3 Workday employer APIs…")
             nw = scrape_workday.run(conn, verbose=False)
             st.write(f"Workday: **+{nw}**")
             st.write("3/3 Aggregator APIs…")
@@ -592,7 +592,18 @@ with t_resume:
                     st.caption(f"ATS {sc['ats']} · Rec {sc['recruiter']} · "
                                f"HM {sc['hiring_manager']}")
                     if v["warnings"]:
-                        st.error(f"⚠️ {len(v['warnings'])} over-claim flag(s)")
+                        # A bare count is useless — you can't act on "1 flag".
+                        # Click through to see exactly which claim is the problem.
+                        with st.popover(f"⚠️ {len(v['warnings'])} over-claim flag"
+                                        f"{'s' if len(v['warnings']) > 1 else ''}",
+                                        use_container_width=True):
+                            st.markdown(f"**{v['label']} — what this version claims "
+                                        f"that your resume doesn't back up:**")
+                            for w in v["warnings"]:
+                                st.warning(w)
+                            st.caption("Fix it in the editor below, or use a gentler "
+                                       "version. Over-claiming fails interviews and "
+                                       "background checks.")
                     elif v["mode"] != "base":
                         st.success("✅ Authentic")
 
@@ -851,7 +862,7 @@ with t_co:
 with t_h1b:
     from src import sponsors as sp
     ui.section("🎫 H-1B sponsor priority",
-               "Apply to **strong** sponsors first. Seeds from a curated BFSI map; "
+               "Apply to **strong** sponsors first. Seeds from a curated employer map; "
                "live counts from public H-1B disclosure data.")
     h = load("""SELECT name, sponsors_h1b, job_count, careers_url FROM companies
                 ORDER BY CASE
