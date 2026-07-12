@@ -56,6 +56,52 @@ def _key() -> str:
     return ""
 
 
+def _gemini_key() -> str:
+    """Gemini API key from config/profile.yml (api_keys.gemini_key) or the
+    career-ops .env (GEMINI_API_KEY)."""
+    from pathlib import Path
+    import yaml as _yaml
+    cfg = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
+    if cfg.exists():
+        try:
+            k = ((_yaml.safe_load(cfg.read_text(encoding="utf-8")) or {})
+                 .get("api_keys", {}) or {}).get("gemini_key", "")
+            if k:
+                return k
+        except Exception:
+            pass
+    env = careerops_dir() / ".env"
+    if env.exists():
+        m = re.search(r"GEMINI_API_KEY=([A-Za-z0-9_\-]+)", env.read_text(encoding="utf-8"))
+        if m and "your_" not in m.group(1):
+            return m.group(1)
+    return ""
+
+
+def _gemini_chat(prompt: str, max_tokens=1400) -> str:
+    """Google Gemini free tier (~1500 req/day) — used when OpenRouter is capped."""
+    global _last_error
+    key = _gemini_key()
+    if not key:
+        return ""
+    for model in ("gemini-2.0-flash", "gemini-2.0-flash-lite"):
+        try:
+            r = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
+                timeout=90, headers={"Content-Type": "application/json"},
+                json={"contents": [{"parts": [{"text": prompt}]}],
+                      "generationConfig": {"maxOutputTokens": max_tokens}})
+            if r.status_code != 200:
+                _last_error = f"gemini/{model}: HTTP {r.status_code}"
+                continue
+            txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            if txt and txt.strip():
+                return txt.strip()
+        except Exception as e:
+            _last_error = f"gemini/{model}: {type(e).__name__}"
+    return ""
+
+
 _last_error = ""
 
 
@@ -69,10 +115,7 @@ def _chat(prompt: str, max_tokens=1400, passes=3) -> str:
     global _last_error
     _last_error = ""
     key = _key()
-    if not key:
-        _last_error = "No OpenRouter key found in career-ops/.env"
-        return ""
-    models = _free_models()
+    models = _free_models() if key else []
     for attempt in range(passes):
         for model in models:
             try:
@@ -96,6 +139,12 @@ def _chat(prompt: str, max_tokens=1400, passes=3) -> str:
                 continue
         if attempt < passes - 1:
             time.sleep(4)
+    # OpenRouter exhausted/absent → try Gemini's separate free quota
+    g = _gemini_chat(prompt, max_tokens)
+    if g:
+        return g
+    if not key and not _gemini_key():
+        _last_error = "No AI key found (OpenRouter in career-ops/.env or gemini_key in profile.yml)"
     return ""
 
 
@@ -142,13 +191,17 @@ _LEVELS = {
 }
 
 
-def tailor_summary(url: str, title: str, company: str, level: str = "Balanced") -> str:
-    """Rewritten 4-line Professional Summary targeted at this job ('' on failure)."""
+def tailor_summary(url: str, title: str, company: str, level: str = "Balanced",
+                   intensity: int = 5) -> str:
+    """Rewritten 4-line Professional Summary targeted at this job ('' on failure).
+    intensity 1-10 gives the model fine control over how hard to reframe."""
     jd = fetch_jd(url) or f"(Job title: {title} at {company})"
     resume = load_cv_md()
     style = _LEVELS.get(level, _LEVELS["Balanced"])
     prompt = f"""Rewrite this resume's Professional Summary for the specific job below.
-Tailoring level: {level}. {style}
+Tailoring intensity: {intensity} on a 1-10 scale ({level}). {style}
+At intensity 1 change almost nothing; at 10 reframe the whole summary around the
+job's top requirements. Scale your edits to match {intensity}.
 Hard rules: max 4 lines; factual (use ONLY facts present in the resume — NEVER invent
 skills, numbers, employers, or titles); plain text; no emojis; no hype words
 (expert, world-class, guru, rockstar, 10x). Respond with ONLY the rewritten summary.
