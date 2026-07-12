@@ -1,153 +1,45 @@
-"""bfsi-job-hunter — Streamlit frontend.
+"""Job Search Copilot — Streamlit frontend.
 
     streamlit run app.py
 
-Three tabs:
-  Jobs       — filterable table of every discovered posting; edit status inline
-               (new / interested / applied / interview / offer / rejected / skip).
-  Companies  — the auto-growing directory: who's hiring, careers pages, Workday.
-  Summary    — pipeline funnel + counts.
+Presentation only. All business logic lives in src/ (scrapers, scoring, resume,
+AI, apply-link resolution); all styling/primitives live in ui/. This file just
+wires the two together, so the frontend could be replaced wholesale without
+touching a line of logic.
 
-Reads/writes data/jobs.db. No API key, fully local.
+Information architecture
+  Today      → the one screen that answers "what do I apply to right now?"
+  Jobs       → the full board, power filters behind a popover
+  Applied    → pipeline you've acted on, with dates
+  Resume     → 4-step studio (pick → fit → tailor → documents) as sub-tabs
+  Companies  → the auto-growing employer + ATS directory
+  Sponsors   → H-1B priority view
+  Insights   → funnel + top employers + exports
 """
+from __future__ import annotations
 import re
 import sqlite3
 from datetime import date
+
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-
-def posted_days_ago(s) -> int | None:
-    """Normalize messy date_posted ('Posted 3 Days Ago', '2026-07-10') to days."""
-    s = str(s or "").strip().lower()
-    if not s or s == "none" or s == "nan":
-        return None
-    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
-    if m:
-        try:
-            return (date.today() - date(int(m[1]), int(m[2]), int(m[3]))).days
-        except ValueError:
-            return None
-    if "today" in s or "just posted" in s:
-        return 0
-    if "yesterday" in s:
-        return 1
-    m = re.search(r"(\d+)\+?\s*day", s)
-    if m:
-        return int(m.group(1))
-    return None
-
 from src import db
+from src.score import MUST_APPLY_AT
+import ui
 
-st.set_page_config(page_title="Job Search Copilot", page_icon="🧭", layout="wide",
-                   initial_sidebar_state="expanded")
+st.set_page_config(page_title="Job Search Copilot", page_icon="🧭",
+                   layout="wide", initial_sidebar_state="collapsed")
+ui.inject()
 
-# ── Design system ───────────────────────────────────────────────────────────
-# One primary (blue) + one accent (emerald, reserved for apply/success only).
-# Slate neutrals, hairline borders, near-flat elevation. Calm > decorated.
-st.markdown("""
-<style>
-:root{
-  --primary:#2563eb; --primary-dk:#1d4ed8; --primary-sf:#eff6ff;
-  --accent:#10b981;  --accent-dk:#059669;  --accent-sf:#ecfdf5;
-  --ink:#0f172a; --body:#334155; --muted:#64748b; --faint:#94a3b8;
-  --line:#e2e8f0; --line-sf:#f1f5f9; --surface:#ffffff; --canvas:#f8fafc;
-  --r:12px; --r-sm:8px;
-  --sh:0 1px 2px rgba(15,23,42,.04);
-  --sh-md:0 4px 16px -4px rgba(15,23,42,.10);
-}
-.stApp{background:var(--canvas);}
-.block-container{padding-top:1.4rem;padding-bottom:3rem;max-width:1440px;}
-html,body,[class*="css"]{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;
-  color:var(--body);-webkit-font-smoothing:antialiased;}
-
-/* Type scale */
-h1{font-size:28px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
-h2{font-size:21px;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
-h3{font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
-h4{font-size:15px;font-weight:700;color:var(--ink);margin:6px 0 2px;}
-h5{font-size:13.5px;font-weight:700;color:var(--muted);
-   text-transform:uppercase;letter-spacing:.05em;}
-
-/* Header — slim, confident, not a billboard */
-.app-header{background:linear-gradient(105deg,#1e3a8a 0%,var(--primary) 60%,#3b82f6 100%);
-  color:#fff;border-radius:16px;padding:22px 28px;margin-bottom:16px;
-  box-shadow:var(--sh-md);}
-.app-header h1{margin:0;font-size:25px;color:#fff;letter-spacing:-.01em;}
-.app-header p{margin:5px 0 0;opacity:.88;font-size:13.5px;font-weight:400;}
-
-/* KPI cards — flat, quiet, scannable */
-[data-testid="stMetric"]{background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh);}
-[data-testid="stMetricLabel"] p{font-size:12px;color:var(--muted);font-weight:600;
-  text-transform:uppercase;letter-spacing:.04em;}
-[data-testid="stMetricValue"]{color:var(--ink);font-weight:700;font-size:27px;
-  letter-spacing:-.02em;}
-
-/* Tabs — segmented control */
-.stTabs [data-baseweb="tab-list"]{gap:2px;background:var(--surface);padding:5px;
-  border-radius:var(--r);border:1px solid var(--line);box-shadow:var(--sh);}
-.stTabs [data-baseweb="tab"]{border-radius:var(--r-sm);padding:8px 16px;
-  font-weight:600;font-size:13.5px;color:var(--muted);transition:.15s;}
-.stTabs [data-baseweb="tab"]:hover{background:var(--line-sf);color:var(--ink);}
-.stTabs [aria-selected="true"]{background:var(--primary)!important;color:#fff!important;}
-.stTabs [data-baseweb="tab-highlight"],.stTabs [data-baseweb="tab-border"]{display:none;}
-
-/* Buttons — quiet by default; ONE emerald CTA per view */
-.stButton>button,.stLinkButton>a,.stDownloadButton>button{
-  border-radius:var(--r-sm);font-weight:600;font-size:13.5px;
-  border:1px solid var(--line);background:var(--surface);color:var(--body);
-  transition:.15s;box-shadow:var(--sh);}
-.stButton>button:hover,.stLinkButton>a:hover,.stDownloadButton>button:hover{
-  border-color:var(--primary);color:var(--primary);background:var(--primary-sf);
-  transform:translateY(-1px);}
-.stButton>button[kind="primary"],.stLinkButton>a[kind="primary"]{
-  background:var(--accent);border-color:var(--accent);color:#fff!important;}
-.stButton>button[kind="primary"]:hover,.stLinkButton>a[kind="primary"]:hover{
-  background:var(--accent-dk);border-color:var(--accent-dk);color:#fff!important;}
-
-/* Surfaces */
-[data-testid="stDataFrame"],[data-testid="stExpander"],
-div[data-testid="stVerticalBlockBorderWrapper"]{
-  border:1px solid var(--line);border-radius:var(--r);background:var(--surface);
-  box-shadow:var(--sh);}
-[data-testid="stDataFrame"]{overflow:hidden;}
-
-/* Inputs — hairline, focus-ring only when focused */
-.stTextInput input,.stNumberInput input,.stTextArea textarea{
-  border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface);
-  font-size:13.5px;}
-.stTextInput input:focus,.stTextArea textarea:focus{border-color:var(--primary);
-  box-shadow:0 0 0 3px rgba(37,99,235,.10);}
-.stSelectbox div[data-baseweb="select"]>div,
-.stMultiSelect div[data-baseweb="select"]>div{
-  border-radius:var(--r-sm);border:1px solid var(--line)!important;
-  background:var(--surface)!important;min-height:40px;cursor:pointer;
-  font-size:13.5px;transition:.15s;}
-.stSelectbox div[data-baseweb="select"]>div:hover,
-.stMultiSelect div[data-baseweb="select"]>div:hover{
-  border-color:var(--primary)!important;background:var(--primary-sf)!important;}
-.stSelectbox svg,.stMultiSelect svg{color:var(--faint);}
-.stSelectbox label,.stTextInput label,.stMultiSelect label,
-.stSlider label,.stCheckbox label,.stRadio label{
-  font-weight:600;color:var(--body);font-size:13px;}
-
-/* Sidebar — light, minimal */
-[data-testid="stSidebar"]{background:var(--surface);border-right:1px solid var(--line);}
-[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{font-size:15px;color:var(--ink);}
-
-/* Callouts — soft tints, no sirens */
-[data-testid="stAlert"]{border-radius:var(--r);border:1px solid var(--line);
-  box-shadow:none;font-size:13.5px;}
-[data-testid="stCaptionContainer"]{color:var(--muted);font-size:12.5px;}
-[data-testid="stCode"]{border-radius:var(--r-sm);border:1px solid var(--line);}
-hr{margin:14px 0;border-color:var(--line);}
-#MainMenu,footer{visibility:hidden;}
-</style>
-""", unsafe_allow_html=True)
+APPLIED_STATES = ("applied", "responded", "interview", "offer")
+AGE_OPTS = {"Any time": None, "Today": 0, "1 day": 1, "3 days": 3,
+            "1 week": 7, "2 weeks": 14, "1 month": 30}
+STEPS = ["Pick a job", "Fit scores", "AI tailor", "Documents & apply"]
 
 
+# ── data plumbing ───────────────────────────────────────────────────────────
 @st.cache_resource
 def _conn():
     c = sqlite3.connect(db.DB_PATH, check_same_thread=False)
@@ -163,70 +55,33 @@ def load(sql, params=()):
     return pd.read_sql_query(sql, conn, params=params)
 
 
-st.markdown(
-    "<div class='app-header'><h1>🧭 Job Search Copilot</h1>"
-    "<p>Your AI job-search copilot — <b>find · tailor · apply · track</b>. "
-    "Multi-source discovery, fit-scoring, AI-tailored resumes and application "
-    "tracking, all local and token-free.</p></div>",
-    unsafe_allow_html=True)
-c = db.counts(conn)
-n_applied = conn.execute(
-    "SELECT COUNT(*) FROM jobs WHERE status IN ('applied','responded','interview','offer')"
-).fetchone()[0]
-n_fire = conn.execute(
-    "SELECT COUNT(*) FROM jobs WHERE score>=8 AND status IN ('new','interested')").fetchone()[0]
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("Jobs found", c["jobs"])
-m2.metric("Unreviewed", c["new"])
-m3.metric("🔥 Must-apply", n_fire)
-m4.metric("Applied", n_applied)
-m5.metric("Companies", c["companies"])
+def posted_days_ago(s) -> int | None:
+    """Normalize messy date_posted ('Posted 3 Days Ago', '2026-07-10') to days."""
+    s = str(s or "").strip().lower()
+    if not s or s in ("none", "nan"):
+        return None
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        try:
+            return (date.today() - date(int(m[1]), int(m[2]), int(m[3]))).days
+        except ValueError:
+            return None
+    if "today" in s or "just posted" in s:
+        return 0
+    if "yesterday" in s:
+        return 1
+    m = re.search(r"(\d+)\+?\s*day", s)
+    return int(m.group(1)) if m else None
 
 
 def _post_process():
-    from src import score, sponsors
+    from src import score, sponsors, direct_apply
     score.score_all(conn, verbose=False)
     sponsors.enrich_seeds(conn)
     db.enrich_industries(conn)
+    db.backfill_salary(conn)
+    direct_apply.resolve_all(conn, verbose=False)   # real employer apply links
     db.archive_stale(conn)
-
-
-# ── Ad-hoc scan (sidebar) ───────────────────────────────────────────────────
-with st.sidebar:
-    st.header("⚡ Run a scan now")
-    st.caption("Same pipeline as the scheduler — scrape → filter → dedupe "
-               "→ score → sponsor-tag. Token-free.")
-    if st.button("🏦 Quick scan — Workday banks (~1 min)", use_container_width=True):
-        from src import scrape_workday
-        with st.status("Scanning bank Workday APIs...", expanded=True) as s:
-            n = scrape_workday.run(conn, verbose=False)
-            st.write(f"Workday: **+{n}** new jobs")
-            _post_process()
-            s.update(label=f"Done — +{n} new jobs", state="complete")
-        st.rerun()
-    if st.button("🌐 Full scan — all sources (~5–10 min)", use_container_width=True):
-        from src import scrape_boards, scrape_workday, scrape_apis
-        with st.status("Full scan running — leave this tab open...", expanded=True) as s:
-            st.write("1/3 Job boards (Indeed / LinkedIn / Google)...")
-            nb = scrape_boards.run(conn, verbose=False)
-            st.write(f"Boards: **+{nb}** new jobs")
-            st.write("2/3 Workday bank APIs...")
-            nw = scrape_workday.run(conn, verbose=False)
-            st.write(f"Workday: **+{nw}** new jobs")
-            st.write("3/3 Aggregator APIs (Adzuna / Jooble, if keys set)...")
-            na = scrape_apis.run(conn, verbose=False)
-            st.write(f"APIs: **+{na}** new jobs")
-            _post_process()
-            s.update(label=f"Done — +{nb + nw + na} new jobs", state="complete")
-        st.rerun()
-    st.divider()
-    st.caption(f"DB: `{db.DB_PATH.name}` · statuses: {', '.join(db.STATUSES)}")
-
-from src.score import MUST_APPLY_AT
-
-APPLIED_STATES = ("applied", "responded", "interview", "offer")
-AGE_OPTS = {"Any time": None, "Today": 0, "1 day": 1, "3 days": 3,
-            "1 week": 7, "2 weeks": 14, "1 month": 30}
 
 
 def _save_edits(df, edited, key_note="notes"):
@@ -239,7 +94,8 @@ def _save_edits(df, edited, key_note="notes"):
         if status_changed or notes_changed:
             conn.execute("UPDATE jobs SET status=?, notes=? WHERE rowid=?",
                          (row["status"], row.get(key_note) or "", int(orig["rowid"])))
-            if status_changed and row["status"] in APPLIED_STATES and not (orig["date_applied"] or ""):
+            if status_changed and row["status"] in APPLIED_STATES \
+                    and not (orig["date_applied"] or ""):
                 conn.execute("UPDATE jobs SET date_applied=? WHERE rowid=?",
                              (db.today(), int(orig["rowid"])))
             n += 1
@@ -247,33 +103,81 @@ def _save_edits(df, edited, key_note="notes"):
     return n
 
 
-def render_job_board(kp, default_status=None, default_freshness="Any time"):
-    """Reusable filter panel + editable jobs table. `kp` = unique widget-key prefix."""
+def mark_applied(url: str):
+    conn.execute("UPDATE jobs SET status='applied', date_applied=? WHERE url=?",
+                 (db.today(), url))
+    conn.commit()
+
+
+# ── quick-view dialog: drill into a job without leaving the list ────────────
+@st.dialog("Job details", width="large")
+def job_dialog(row: dict):
+    from src import jd_match as jdm
+    st.markdown(f"### {row['title']}")
+    st.caption(f"{row['company']} · {row['location'] or '—'} · "
+               f"{row.get('industry') or 'BFSI'}")
+    st.markdown(ui.chips([
+        (f"{row['score']:.1f}/10 fit", ui.score_kind(row["score"])),
+        ("MUST APPLY", "w") if row["score"] >= MUST_APPLY_AT else ("", ""),
+        (row.get("salary") or "", "a"),
+        (row.get("source") or "", "n"),
+    ]), unsafe_allow_html=True)
+
+    jd = jdm.fetch_jd(row["url"]) or (row.get("description") or "")
+    flags = jdm.jd_flags(jd)
+    for b in flags["block"]:
+        st.error(f"🚫 {b}")
+    for n in flags["note"]:
+        st.warning(f"⚠️ {n}")
+
+    if jd.strip():
+        with st.expander("📄 Full job description", expanded=False):
+            st.markdown(f"<div style='max-height:340px;overflow:auto;font-size:13.5px;"
+                        f"line-height:1.6'>{jd}</div>", unsafe_allow_html=True)
+    else:
+        st.info("Full JD isn't published by this source — open the posting to read it.")
+
+    a, b, c = st.columns(3)
+    with a:
+        st.link_button("✅ Apply on employer site", row["apply_url"],
+                       use_container_width=True, type="primary")
+    with b:
+        st.link_button("↗ Original posting", row["url"], use_container_width=True)
+    with c:
+        if st.button("Mark applied", use_container_width=True, key="dlg_applied"):
+            mark_applied(row["url"])
+            st.rerun()
+
+
+# ── the jobs board (filters in a popover; table stays the hero) ─────────────
+def job_board(kp: str, default_status=None, height=460):
     default_status = default_status if default_status is not None else ["new", "interested"]
-    with st.expander("🔍 Filters", expanded=True):
-        f1, f2, f3, f4 = st.columns([1.2, 1, 1, 1.2])
-        with f1:
-            status_f = st.multiselect("Status", db.STATUSES, default=default_status, key=f"{kp}_status")
-            age_f = st.selectbox("Freshness (pulled)", list(AGE_OPTS),
-                                 index=list(AGE_OPTS).index(default_freshness), key=f"{kp}_age")
-            posted_f = st.selectbox("Posted age (from source)", list(AGE_OPTS), index=0,
-                                    key=f"{kp}_posted",
-                                    help="Job board's own posted date; jobs with no date always pass")
-        with f2:
-            min_score = st.slider("Min score (1–10)", 1.0, 10.0, 1.0, 0.5, key=f"{kp}_min")
-            must_only = st.checkbox(f"🔥 Must-apply only (≥ {MUST_APPLY_AT:.0f})", key=f"{kp}_must")
-        with f3:
-            companies_all = [r[0] for r in conn.execute(
-                "SELECT DISTINCT company FROM jobs ORDER BY company")]
-            company_f = st.multiselect("Company", companies_all, key=f"{kp}_co")
-            source_f = st.multiselect("Source", [r[0] for r in conn.execute(
-                "SELECT DISTINCT source FROM jobs")], key=f"{kp}_src")
+    bar_l, bar_r = st.columns([3, 1.15])
+    with bar_l:
+        kw = st.text_input("Search", placeholder="Search title or company…",
+                           key=f"{kp}_kw", label_visibility="collapsed")
+    with bar_r:
+        with st.popover("⚙️ Filters", use_container_width=True):
+            status_f = st.multiselect("Status", db.STATUSES, default=default_status,
+                                      key=f"{kp}_status")
+            c1, c2 = st.columns(2)
+            with c1:
+                age_f = st.selectbox("Pulled", list(AGE_OPTS), key=f"{kp}_age")
+            with c2:
+                posted_f = st.selectbox("Posted", list(AGE_OPTS), key=f"{kp}_posted",
+                                        help="Source's own posted date; jobs with "
+                                             "no date always pass")
+            min_score = st.slider("Min fit", 1.0, 10.0, 1.0, 0.5, key=f"{kp}_min")
+            must_only = st.checkbox(f"🔥 Must-apply only (≥ {MUST_APPLY_AT:.0f})",
+                                    key=f"{kp}_must")
+            core_only = st.checkbox("Core-fit ★ only", key=f"{kp}_core")
+            company_f = st.multiselect("Company", [r[0] for r in conn.execute(
+                "SELECT DISTINCT company FROM jobs ORDER BY company")], key=f"{kp}_co")
             industry_f = st.multiselect("Industry", [r[0] for r in conn.execute(
                 "SELECT DISTINCT industry FROM companies WHERE industry != '' ORDER BY 1")],
                 key=f"{kp}_ind")
-        with f4:
-            kw = st.text_input("Search title/company", key=f"{kp}_kw")
-            core_only = st.checkbox("Core-fit ★ only", key=f"{kp}_core")
+            source_f = st.multiselect("Source", [r[0] for r in conn.execute(
+                "SELECT DISTINCT source FROM jobs")], key=f"{kp}_src")
 
     q = """SELECT jobs.rowid AS rowid, jobs.url AS url, jobs.title AS title,
                   jobs.company AS company, COALESCE(companies.industry,'') AS industry,
@@ -282,7 +186,8 @@ def render_job_board(kp, default_status=None, default_freshness="Any time"):
                   jobs.source AS source, jobs.is_core AS is_core,
                   COALESCE(jobs.salary,'') AS salary,
                   COALESCE(NULLIF(jobs.apply_url,''), jobs.url) AS apply_url,
-                  jobs.status AS status, jobs.notes AS notes, jobs.date_applied AS date_applied
+                  jobs.status AS status, jobs.notes AS notes,
+                  jobs.date_applied AS date_applied
            FROM jobs LEFT JOIN companies ON jobs.company = companies.name
            WHERE jobs.score >= ?"""
     p = [must_only and MUST_APPLY_AT or min_score]
@@ -303,21 +208,24 @@ def render_job_board(kp, default_status=None, default_freshness="Any time"):
         q += " AND date_found >= date('now', ?)"; p.append(f"-{days} days")
     q += " ORDER BY score DESC, date_found DESC"
     df = load(q, p)
+
     pmax = AGE_OPTS[posted_f]
     if pmax is not None and not df.empty:
-        pd_days = df["date_posted"].map(posted_days_ago)
-        df = df[(pd_days.isna()) | (pd_days <= pmax)].reset_index(drop=True)
+        d = df["date_posted"].map(posted_days_ago)
+        df = df[(d.isna()) | (d <= pmax)].reset_index(drop=True)
 
-    st.caption(f"**{len(df)} jobs** — set **Status** to `applied` and it moves to the "
-               f"✅ Applied tab with today's date. 🔥 = must apply (score ≥ {MUST_APPLY_AT:.0f}).")
     if df.empty:
-        st.info("No jobs match. Loosen filters or run a scan from the sidebar.")
+        ui.empty("🔍", "No jobs match these filters",
+                 "Loosen the filters, or run a scan from the sidebar.")
         return
+
+    st.caption(f"**{len(df)} jobs** · set **Status → applied** and it moves to "
+               f"Applied with today's date. 🔥 = fit ≥ {MUST_APPLY_AT:.0f}.")
     view = df.drop(columns=["rowid", "is_core", "date_applied"]).copy()
     view.insert(0, "score", view.pop("score"))
     view.insert(0, "🔥", (df["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""}))
     edited = st.data_editor(
-        view, hide_index=True, use_container_width=True, height=520,
+        view, hide_index=True, use_container_width=True, height=height,
         column_config={
             "🔥": st.column_config.TextColumn("🔥", width="small"),
             "apply_url": st.column_config.LinkColumn(
@@ -326,162 +234,229 @@ def render_job_board(kp, default_status=None, default_freshness="Any time"):
                      "skips reposters like Lensa/Talentify."),
             "url": st.column_config.LinkColumn("Source", display_text="src ↗"),
             "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES),
-            "score": st.column_config.NumberColumn("Resume fit", format="%.1f / 10",
-                     help="1-10 match vs your target-role keywords, seniority, H-1B sponsor history"),
-            "industry": st.column_config.TextColumn("Industry"),
+            "score": st.column_config.NumberColumn("Fit", format="%.1f", width="small",
+                     help="1-10 match vs your keywords, seniority, H-1B sponsor history"),
             "title": st.column_config.TextColumn("Title", width="large"),
             "salary": st.column_config.TextColumn("Salary (FYI)",
-                     help="Listed pay when the posting states one — informational only, never filtered."),
+                     help="Shown when the posting lists pay. Never used to filter."),
             "date_posted": st.column_config.TextColumn("Posted"),
             "date_found": st.column_config.TextColumn("Pulled"),
         },
         disabled=["🔥", "title", "company", "industry", "location", "source", "url",
                   "apply_url", "salary", "score", "date_posted", "date_found"],
-        key=f"{kp}_editor",
-    )
-    if st.button("💾 Save changes", type="primary", key=f"{kp}_save"):
-        n = _save_edits(df, edited)
-        st.success(f"Saved {n} change(s).")
+        key=f"{kp}_editor")
+    if st.button("💾 Save changes", key=f"{kp}_save"):
+        st.success(f"Saved {_save_edits(df, edited)} change(s).")
         st.rerun()
 
 
-tab_today, tab_jobs, tab_applied, tab_resume, tab_co, tab_h1b, tab_sum = st.tabs(
-    ["🎯 Today", "📋 Jobs", "✅ Applied", "📄 Resume & Apply", "🏢 Companies",
-     "🎫 H-1B Sponsors", "📊 Summary"])
+# ── Hero + KPI strip ────────────────────────────────────────────────────────
+c = db.counts(conn)
+n_applied = conn.execute(
+    f"SELECT COUNT(*) FROM jobs WHERE status IN {APPLIED_STATES}").fetchone()[0]
+n_fire = conn.execute(
+    "SELECT COUNT(*) FROM jobs WHERE score>=8 AND status IN ('new','interested')"
+).fetchone()[0]
+n_link = conn.execute(
+    "SELECT COUNT(*) FROM jobs WHERE COALESCE(apply_url,'') != ''").fetchone()[0]
 
-# ── Today tab: fresh action queue (full board + follow-ups) ─────────────────
-with tab_today:
-    st.subheader("🔥 Apply next — fresh, high-fit, still open")
-    st.caption("Same powerful filters as the Jobs tab, pre-focused on new & "
-               "interested roles. Sort by score, filter by industry, mark applied inline.")
-    render_job_board("today", default_status=["new", "interested"])
+ui.hero("Job Search Copilot",
+        "Finds BFSI roles across every source, scores them against your resume, "
+        "tailors it per job, and links you straight to the employer's own "
+        "application page — never a reposter.",
+        kicker="find · tailor · apply · track")
+
+k1, k2, k3, k4, k5 = st.columns(5)
+k1.metric("Jobs found", f"{c['jobs']:,}")
+k2.metric("Must apply", n_fire)
+k3.metric("Unreviewed", c["new"])
+k4.metric("Applied", n_applied)
+k5.metric("Direct links", f"{n_link:,}")
+
+# ── Sidebar: secondary controls only ────────────────────────────────────────
+with st.sidebar:
+    st.subheader("⚡ Run a scan")
+    st.caption("Scrape → filter → dedupe → score → sponsor-tag → resolve apply "
+               "links. Token-free.")
+    if st.button("🏦 Quick — Workday banks", use_container_width=True):
+        from src import scrape_workday
+        with st.status("Scanning bank Workday APIs…", expanded=True) as s:
+            n = scrape_workday.run(conn, verbose=False)
+            st.write(f"Workday: **+{n}** new")
+            _post_process()
+            s.update(label=f"Done — +{n} new jobs", state="complete")
+        st.rerun()
+    if st.button("🌐 Full — all sources", use_container_width=True):
+        from src import scrape_boards, scrape_workday, scrape_apis
+        with st.status("Full scan — keep this tab open…", expanded=True) as s:
+            st.write("1/3 Job boards…")
+            nb = scrape_boards.run(conn, verbose=False)
+            st.write(f"Boards: **+{nb}**")
+            st.write("2/3 Workday bank APIs…")
+            nw = scrape_workday.run(conn, verbose=False)
+            st.write(f"Workday: **+{nw}**")
+            st.write("3/3 Aggregator APIs…")
+            na = scrape_apis.run(conn, verbose=False)
+            st.write(f"APIs: **+{na}**")
+            _post_process()
+            s.update(label=f"Done — +{nb+nw+na} new jobs", state="complete")
+        st.rerun()
+    st.divider()
+    st.caption(f"DB `{db.DB_PATH.name}` · {c['companies']} companies tracked")
+
+# ── Navigation ──────────────────────────────────────────────────────────────
+t_today, t_jobs, t_applied, t_resume, t_co, t_h1b, t_ins = st.tabs(
+    ["🎯 Today", "📋 Jobs", "✅ Applied", "📄 Resume Studio", "🏢 Companies",
+     "🎫 Sponsors", "📊 Insights"])
+
+# ── Today: the answer to "what do I apply to right now?" ────────────────────
+with t_today:
+    top = load(f"""SELECT jobs.rowid, jobs.url, jobs.title, jobs.company, jobs.location,
+                          jobs.score, jobs.source, jobs.date_posted,
+                          COALESCE(jobs.salary,'') salary,
+                          COALESCE(jobs.description,'') description,
+                          COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
+                          COALESCE(companies.industry,'') industry,
+                          COALESCE(companies.sponsors_h1b,'') sponsor
+                   FROM jobs LEFT JOIN companies ON jobs.company = companies.name
+                   WHERE jobs.status IN ('new','interested')
+                     AND jobs.score >= {MUST_APPLY_AT}
+                   ORDER BY jobs.score DESC, jobs.date_found DESC LIMIT 6""")
+    ui.section("🔥 Top picks for you",
+               "Highest-fit roles you haven't actioned yet. Apply goes straight "
+               "to the employer's portal.")
+    if top.empty:
+        ui.empty("🎉", "Nothing urgent right now",
+                 "No unreviewed must-apply roles. Run a scan or browse the Jobs tab.")
+    else:
+        for i in range(0, len(top), 2):
+            cols = st.columns(2)
+            for col, (_, r) in zip(cols, top.iloc[i:i+2].iterrows()):
+                with col:
+                    ui.job_card(r["title"], r["company"], r["location"], r["score"],
+                                industry=r["industry"], salary=r["salary"],
+                                sponsor=r["sponsor"], source=r["source"])
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        st.link_button("✅ Apply", r["apply_url"],
+                                       use_container_width=True, type="primary")
+                    with b2:
+                        if st.button("View", key=f"v{r['rowid']}",
+                                     use_container_width=True):
+                            job_dialog(r.to_dict())
 
     st.divider()
-    st.subheader("⏰ Follow-ups due (applied 7+ days ago, no response)")
+    ui.section("📋 Your queue", "Same power filters as the Jobs tab.")
+    job_board("today", default_status=["new", "interested"], height=380)
+
+    st.divider()
+    ui.section("⏰ Follow-ups due", "Applied 7+ days ago with no response.")
     fu = load("""SELECT date_applied, title, company, url,
-                        CAST(julianday('now') - julianday(date_applied) AS INT) AS days_ago
-                 FROM jobs WHERE status='applied'
-                   AND date_applied != '' AND date_applied <= date('now','-7 days')
+                        CAST(julianday('now') - julianday(date_applied) AS INT) days_ago
+                 FROM jobs WHERE status='applied' AND date_applied != ''
+                   AND date_applied <= date('now','-7 days')
                  ORDER BY date_applied""")
     if fu.empty:
-        st.caption("None due — good.")
+        st.caption("None due — you're on top of it.")
     else:
         st.dataframe(fu, hide_index=True, use_container_width=True,
-                     column_config={"url": st.column_config.LinkColumn("Link", display_text="open ↗"),
-                                    "days_ago": st.column_config.NumberColumn("Days ago")})
-        st.caption("Message the recruiter/hiring manager on LinkedIn, or re-check status.")
+                     column_config={"url": st.column_config.LinkColumn(
+                         "Link", display_text="open ↗")})
 
-# ── Jobs tab ────────────────────────────────────────────────────────────────
-with tab_jobs:
-    render_job_board("jobs", default_status=["new", "interested"])
+# ── Jobs ────────────────────────────────────────────────────────────────────
+with t_jobs:
+    ui.section("📋 Every job we found", "Filter, score-sort, and mark status inline.")
+    job_board("jobs", default_status=["new", "interested"], height=560)
 
-# ── Applied tab ─────────────────────────────────────────────────────────────
-with tab_applied:
-    st.caption("Everything you've applied to, with dates. Update status as "
-               "companies respond (responded → interview → offer / rejected).")
-    dfa = load(f"""SELECT rowid, url, title, company, location, score,
-                          date_applied, date_posted, date_found, status, notes
-                   FROM jobs WHERE status IN ('applied','responded','interview','offer','rejected')
-                   ORDER BY date_applied DESC, score DESC""")
+# ── Applied ─────────────────────────────────────────────────────────────────
+with t_applied:
+    ui.section("✅ Applications in flight",
+               "Update status as companies respond: responded → interview → offer.")
+    dfa = load("""SELECT rowid, url, title, company, location, score, date_applied,
+                         date_posted, date_found, status, notes
+                  FROM jobs
+                  WHERE status IN ('applied','responded','interview','offer','rejected')
+                  ORDER BY date_applied DESC, score DESC""")
     if dfa.empty:
-        st.info("Nothing applied yet — mark jobs as `applied` in the Jobs tab.")
+        ui.empty("📮", "No applications yet",
+                 "Mark a job as `applied` from Today or Jobs and it lands here with a date.")
     else:
-        viewa = dfa.drop(columns=["rowid"]).copy()
-        editeda = st.data_editor(
-            viewa, hide_index=True, use_container_width=True, height=520,
+        edited = st.data_editor(
+            dfa.drop(columns=["rowid"]), hide_index=True, use_container_width=True,
+            height=500,
             column_config={
                 "url": st.column_config.LinkColumn("Link", display_text="open ↗"),
                 "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES),
-                "score": st.column_config.NumberColumn("Score", format="%.1f / 10"),
+                "score": st.column_config.NumberColumn("Fit", format="%.1f"),
                 "date_applied": st.column_config.TextColumn("Applied on"),
-                "date_posted": st.column_config.TextColumn("Posted"),
-                "date_found": st.column_config.TextColumn("Pulled"),
                 "title": st.column_config.TextColumn("Title", width="large"),
             },
             disabled=["title", "company", "location", "url", "score",
                       "date_applied", "date_posted", "date_found"],
-            key="applied_editor",
-        )
-        if st.button("💾 Save applied changes", type="primary"):
-            n = _save_edits(dfa, editeda)
-            st.success(f"Saved {n} change(s).")
-            st.rerun()
-        st.download_button("⬇ Export applied (CSV)", dfa.drop(columns=["rowid"]).to_csv(index=False),
-                           "applied-jobs.csv", "text/csv")
+            key="applied_editor")
+        a1, a2 = st.columns([1, 4])
+        with a1:
+            if st.button("💾 Save", key="applied_save"):
+                st.success(f"Saved {_save_edits(dfa, edited)} change(s).")
+                st.rerun()
+        with a2:
+            st.download_button("⬇ Export CSV",
+                               dfa.drop(columns=["rowid"]).to_csv(index=False),
+                               "applied-jobs.csv", "text/csv")
 
-# ── Resume & Apply tab ──────────────────────────────────────────────────────
-with tab_resume:
-    from src import resume as rz
-    st.markdown("### 📄 Resume & Apply Center")
+# ── Resume Studio: 4 steps as sub-tabs = one screen at a time ───────────────
+with t_resume:
+    from src import resume as rz, jd_match
 
-    def stepper(active: int):
-        """Compact visual flow: boxes + arrows, current step highlighted."""
-        steps = [(1, "Pick job"), (2, "Fit scores"),
-                 (3, "AI tailor"), (4, "Documents & apply")]
-        cells = []
-        for n, label in steps:
-            on = n == active
-            bg = "#2563eb" if on else "#ffffff"
-            fg = "#ffffff" if on else "#94a3b8"
-            bd = "#2563eb" if on else "#e2e8f0"
-            cells.append(
-                f"<div style='flex:1;text-align:center;background:{bg};color:{fg};"
-                f"border:1px solid {bd};border-radius:8px;padding:8px 6px;"
-                f"font-size:12.5px;font-weight:600;white-space:nowrap'>"
-                f"<span style='opacity:.6'>{n}</span> &nbsp;{label}</div>")
-            if n != 4:
-                cells.append("<div style='color:#cbd5e1;font-size:14px;"
-                             "align-self:center;padding:0 6px'>→</div>")
-        st.markdown(
-            "<div style='display:flex;align-items:stretch;gap:2px;margin:2px 0 12px'>"
-            + "".join(cells) + "</div>", unsafe_allow_html=True)
+    picked = st.session_state.get("picked_url")
+    step_now = 1 if not picked else st.session_state.get("step_now", 1)
+    ui.step_rail(STEPS, step_now)
 
-    stepper(1)
+    s1, s2, s3, s4 = st.tabs([f"1 · {STEPS[0]}", f"2 · {STEPS[1]}",
+                              f"3 · {STEPS[2]}", f"4 · {STEPS[3]}"])
 
-    # ── Step 1: filters + full-table picker (headers + every column) ──────
-    with st.container(border=True):
-        fc1, fc2, fc3 = st.columns([2, 1.3, 1])
-        with fc1:
-            pick_search = st.text_input("🔎 Filter by title or company",
-                                        placeholder="e.g. fraud, credit risk, Citi…",
-                                        key="pick_search")
-        with fc2:
-            pick_ind = st.selectbox("Industry", ["All"] + [r[0] for r in conn.execute(
+    # Step 1 — pick a job from a real table (headers + every column, scrolls)
+    with s1:
+        f1, f2, f3 = st.columns([2.2, 1.2, 1])
+        with f1:
+            pk = st.text_input("Search", placeholder="Filter by title or company…",
+                               key="pick_search", label_visibility="collapsed")
+        with f2:
+            pi = st.selectbox("Industry", ["All"] + [r[0] for r in conn.execute(
                 "SELECT DISTINCT industry FROM companies WHERE industry != '' ORDER BY 1")],
-                key="pick_ind")
-        with fc3:
-            pick_fire = st.checkbox("🔥 Must-apply only", key="pick_fire")
+                key="pick_ind", label_visibility="collapsed")
+        with f3:
+            pf = st.checkbox("🔥 Must-apply", key="pick_fire")
 
-        pq = """SELECT jobs.url AS url, jobs.title AS title, jobs.company AS company,
-                       jobs.score AS score, jobs.location AS location,
-                       COALESCE(jobs.salary,'') AS salary,
-                       COALESCE(NULLIF(jobs.apply_url,''), jobs.url) AS apply_url,
-                       COALESCE(jobs.description,'') AS description,
-                       COALESCE(companies.industry,'') AS industry, jobs.status AS status
+        pq = """SELECT jobs.url, jobs.title, jobs.company, jobs.score, jobs.location,
+                       jobs.source, COALESCE(jobs.salary,'') salary,
+                       COALESCE(jobs.description,'') description,
+                       COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
+                       COALESCE(companies.industry,'') industry, jobs.status
                 FROM jobs LEFT JOIN companies ON jobs.company = companies.name
                 WHERE jobs.status NOT IN ('skip','stale','rejected')"""
         pp = []
-        if pick_search:
+        if pk:
             pq += " AND (LOWER(jobs.title) LIKE ? OR LOWER(jobs.company) LIKE ?)"
-            pp += [f"%{pick_search.lower()}%"] * 2
-        if pick_ind != "All":
-            pq += " AND companies.industry = ?"; pp.append(pick_ind)
-        if pick_fire:
-            pq += " AND jobs.score >= 8"
+            pp += [f"%{pk.lower()}%"] * 2
+        if pi != "All":
+            pq += " AND companies.industry = ?"; pp.append(pi)
+        if pf:
+            pq += f" AND jobs.score >= {MUST_APPLY_AT}"
         pq += " ORDER BY jobs.score DESC, jobs.date_found DESC LIMIT 300"
-        jobs_pick = load(pq, pp)
+        jp = load(pq, pp)
 
-        if jobs_pick.empty:
-            st.info("No jobs match those filters — loosen them or run a scan.")
+        if jp.empty:
+            ui.empty("🔍", "No jobs match", "Loosen the filters or run a scan.")
             st.stop()
 
-        st.caption(f"**{len(jobs_pick)} matching jobs** — click any row to select it. "
-                   "Scroll the table; headers stay put.")
-        grid = jobs_pick[["score", "title", "company", "industry", "location",
-                          "salary", "status", "apply_url"]].copy()
-        grid.insert(0, "🔥", (jobs_pick["score"] >= 8).map({True: "🔥", False: ""}))
+        st.caption(f"**{len(jp)} jobs** — click a row to select it. "
+                   "Headers stay put while you scroll.")
+        grid = jp[["score", "title", "company", "industry", "location", "salary",
+                   "status", "apply_url"]].copy()
+        grid.insert(0, "🔥", (jp["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""}))
         ev = st.dataframe(
-            grid, hide_index=True, height=250, use_container_width=True,
+            grid, hide_index=True, height=260, use_container_width=True,
             on_select="rerun", selection_mode="single-row",
             column_config={
                 "🔥": st.column_config.TextColumn("🔥", width="small"),
@@ -491,325 +466,287 @@ with tab_resume:
                 "apply_url": st.column_config.LinkColumn("Apply", display_text="apply ↗"),
             }, key="pick_grid")
         rows = ev.selection.rows if ev and ev.selection else []
-        idx = rows[0] if rows else 0
-        job = jobs_pick.iloc[idx]
+        job = jp.iloc[rows[0] if rows else 0]
+        st.session_state["picked_url"] = job["url"]
+        st.session_state["step_now"] = 2
 
-        # ── selected-job strip: compact, one line, with both links ─────────
-        fire = "🔥 MUST APPLY" if job["score"] >= 8 else ""
-        st.markdown(f"""
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #2563eb;
-     border-radius:10px;padding:12px 16px;margin:12px 0 8px">
-  <div style="font-size:16px;font-weight:700;color:#0f172a;letter-spacing:-.01em">{job['title']}
-     <span style="color:#ea580c;font-size:11px;font-weight:700">&nbsp;{fire}</span></div>
-  <div style="color:#64748b;font-size:12.5px;margin-top:3px">
-     {job['company']} &nbsp;·&nbsp; {job['location'] or 'n/a'}
-     &nbsp;·&nbsp; {job['industry'] or 'BFSI'}
-     &nbsp;·&nbsp; {job['salary'] or 'salary not listed'}
-     &nbsp;·&nbsp; <b style="color:#2563eb">{job['score']:.1f}/10 fit</b></div>
-</div>""", unsafe_allow_html=True)
-        lb1, lb2, _ = st.columns([1.3, 1.3, 3])
-        with lb1:
+        ui.job_card(job["title"], job["company"], job["location"], job["score"],
+                    industry=job["industry"], salary=job["salary"], source=job["source"])
+        b1, b2, _ = st.columns([1.2, 1.2, 2.6])
+        with b1:
             st.link_button("✅ Apply on employer site", job["apply_url"],
                            use_container_width=True, type="primary")
-        with lb2:
+        with b2:
             st.link_button("↗ Original posting", job["url"], use_container_width=True)
+        st.caption("Selected. Move to **2 · Fit scores** above. →")
 
-    # ── JD resolve (Workday API → stored description), screen, viewer ──
-    from src import jd_match as _jdm
-    jd_text = _jdm.fetch_jd(job["url"]) or (job.get("description") or "")
-    flags = _jdm.jd_flags(jd_text)
-    if flags["block"]:
-        st.error("🚫 **Likely deal-breaker for your H-1B status:** "
-                 + " · ".join(flags["block"])
-                 + "  — verify before spending an application.")
-    for n in flags["note"]:
-        st.warning("⚠️ " + n)
+    # JD + screening (shared by steps 2-4)
+    jd_text = jd_match.fetch_jd(job["url"]) or (job.get("description") or "")
+    flags = jd_match.jd_flags(jd_text)
 
-    jv1, jv2 = st.columns([1, 2])
-    with jv1:
-        show_jd = st.checkbox("📄 View full job description", value=False, key="show_jd")
-    with jv2:
-        jd_where = st.radio("Show it in", ["Inline (right here)", "Left sidebar"],
-                            horizontal=True, key="jd_where",
-                            label_visibility="collapsed") if show_jd else None
-    if show_jd:
-        if not jd_text.strip():
-            st.info("Full JD isn't fetchable for this source (LinkedIn/Indeed block it). "
-                    "Use the ↗ posting link. Workday jobs show the full JD here.")
-        elif jd_where == "Left sidebar":
-            with st.sidebar:
-                st.markdown(f"### 📄 JD — {job['title'][:40]}")
-                st.markdown(
-                    f"<div style='max-height:75vh;overflow:auto;font-size:13px;"
-                    f"line-height:1.5'>{jd_text}</div>", unsafe_allow_html=True)
-        else:
-            with st.expander("📄 Full job description", expanded=True):
-                st.markdown(
-                    f"<div style='max-height:480px;overflow:auto;padding:6px 4px;"
-                    f"font-size:14px;line-height:1.55'>{jd_text}</div>",
-                    unsafe_allow_html=True)
+    # Step 2 — fit scores
+    with s2:
+        if flags["block"]:
+            st.error("🚫 **Likely deal-breaker for your H-1B status:** "
+                     + " · ".join(flags["block"]) + " — verify before applying.")
+        for n in flags["note"]:
+            st.warning("⚠️ " + n)
 
-    # ── Position-fit analysis (JD fetched from Workday API when possible) ──
-    stepper(2)
-    st.markdown("#### Step 2 — Fit scores")
-    from src import jd_match
-    with st.spinner("Analyzing position fit vs your resume..."):
-        fit = jd_match.analyze(job["url"], job["title"], jd_override=jd_text)
-    s1, s2, s3, s4 = st.columns(4)
-    s1.metric("Recruiter score", f"{fit['recruiter']}/10",
-              help="Surface match a recruiter skims in 6 sec: does the TITLE and "
-                   "headline keywords echo your resume? Low = different job title/domain, "
-                   "even if you could do the work.")
-    s2.metric("ATS/Workday score", f"{fit['ats']}/10",
-              help="Pure keyword coverage — % of the JD's skills present in your resume. "
-                   "This is what the automated filter counts.")
-    s3.metric("Hiring-mgr score", f"{fit['hiring_manager']}/10",
-              help="Domain depth + quantified achievements — what an expert reviewer values.")
-    s4.metric("OVERALL", f"{fit['overall']}/10")
-    st.caption("ℹ️ These are literal **keyword** proxies. Recruiter looks at title/"
-               "keyword echo (so a Fraud resume scores low on an 'Interest Rate Risk' "
-               "title even if transferable); hiring-manager rewards deep skills. The "
-               "**AI deep analysis** below reads *meaning* and usually scores transferable "
-               "fits higher — trust it over these when they disagree.")
-    if not fit["jd_available"]:
-        st.caption("⚠ Full JD not fetchable for this source (LinkedIn/Indeed "
-                   "block it) — scores estimated from the title only. "
-                   "Workday jobs get full-JD analysis.")
-    g1, g2 = st.columns(2)
-    with g1:
-        st.markdown("**✅ Highlights — JD asks, you HAVE:**")
-        st.write(", ".join(fit["highlights"]) or "—")
-    with g2:
-        st.markdown("**❌ Missing — JD asks, resume lacks:**")
-        st.write(", ".join(fit["missing"]) or "Nothing — full coverage!")
-    st.caption("Keyword-based estimate ($0).")
+        with st.spinner("Scoring this position against your resume…"):
+            fit = jd_match.analyze(job["url"], job["title"], jd_override=jd_text)
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Recruiter", f"{fit['recruiter']}/10",
+                  help="The 6-second skim: does the TITLE and headline echo your resume?")
+        m2.metric("ATS / Workday", f"{fit['ats']}/10",
+                  help="Keyword coverage — what the automated filter counts.")
+        m3.metric("Hiring manager", f"{fit['hiring_manager']}/10",
+                  help="Domain depth + quantified achievements.")
+        m4.metric("Overall", f"{fit['overall']}/10")
+        st.caption("These are literal **keyword** proxies. The AI deep-dive in step 3 "
+                   "reads *meaning* and usually scores transferable fits higher — "
+                   "trust it when they disagree.")
+        if not fit["jd_available"]:
+            st.caption("⚠ Full JD not published by this source — scored from the title only.")
 
-    add_kw = []
-    if fit["missing"]:
-        add_kw = st.multiselect(
-            "➕ Add to your AI-tailored resume — pick ONLY skills you genuinely have:",
-            fit["missing"], key="add_missing",
-            help="These get woven into the tailored summary below. The authenticity "
-                 "check still flags anything your base resume can't support, so only "
-                 "tick skills you can defend in an interview.")
+        g1, g2 = st.columns(2)
+        with g1:
+            st.markdown("**✅ Highlights — JD asks, you have**")
+            st.write(", ".join(fit["highlights"]) or "—")
+        with g2:
+            st.markdown("**❌ Missing — JD asks, resume lacks**")
+            st.write(", ".join(fit["missing"]) or "Nothing — full coverage!")
 
-    # ── AI deep analysis + AI tailoring (free OpenRouter models) ──────
-    stepper(3)
-    st.markdown("#### Step 3 — AI deep-dive & tailoring")
-    a1, a2 = st.columns(2)
-    with a1:
-        if st.button("🤖 AI deep analysis (free model, ~30s)", use_container_width=True):
-            from src import ai
-            with st.spinner("Free model reading the JD vs your resume..."):
-                verdict = ai.analyze_job(job["url"], job["title"], job["company"])
-            if verdict:
-                st.session_state["ai_verdict"] = verdict
-                conn.execute("UPDATE jobs SET score=?, notes=? WHERE url=?",
-                             (float(verdict.get("score_10", job["score"])),
-                              "AI-scored", job["url"]))
-                conn.commit()
+        add_kw = []
+        if fit["missing"]:
+            add_kw = st.multiselect(
+                "➕ Weave into the AI-tailored resume — tick ONLY skills you genuinely have",
+                fit["missing"], key="add_missing",
+                help="The authenticity check still flags anything your base resume "
+                     "can't support, so only tick what you can defend in an interview.")
+
+        with st.expander("📄 Read the full job description"):
+            if jd_text.strip():
+                st.markdown(f"<div style='max-height:420px;overflow:auto;font-size:13.5px;"
+                            f"line-height:1.6'>{jd_text}</div>", unsafe_allow_html=True)
             else:
-                from src import ai as _ai
-                st.warning("Free AI models are at their daily cap right now — the "
-                           "keyword scores and Highlights/Missing above still apply. "
-                           f"({_ai.last_error() or 'all busy'}). Try again tomorrow.")
-    with a2:
-        level_n = st.slider(
-            "Tailoring strength (1 = light touch · 10 = strong reframe)",
-            min_value=1, max_value=10, value=5, key="tailor_level",
-            help="1-3 = light reorder of existing wording · 4-7 = emphasize matching "
-                 "experience · 8-10 = strong reframe toward the JD (still facts-only). "
-                 "Higher lifts the ATS score but raises over-claim risk — the "
-                 "authenticity check flags it.")
-        level = ("Conservative" if level_n <= 3 else
-                 "Balanced" if level_n <= 7 else "Aggressive")
-        st.caption(f"Level {level_n}/10 — **{level}**")
-        if st.button("✨ AI-tailored resume for this job (~30s)", use_container_width=True):
-            from src import ai
-            with st.spinner("Tailoring your summary (tries all free models, then offline)..."):
-                new_summary = ai.tailor_summary(job["url"], job["title"], job["company"],
-                                                level, intensity=level_n, emphasize=add_kw)
-                mode = "AI"
-                if not new_summary:
-                    new_summary = ai.tailor_summary_offline(job["url"], job["title"], job["company"])
-                    mode = "offline"
-            if new_summary:
-                st.session_state["ai_summary"] = new_summary
-                st.session_state["ai_summary_mode"] = mode
+                st.info("This source doesn't publish the JD — use ↗ Original posting.")
+
+    # Step 3 — AI deep-dive & tailoring
+    with s3:
+        a1, a2 = st.columns(2)
+        with a1:
+            st.markdown("**🤖 AI deep analysis**")
+            st.caption("A free model reads the JD against your resume and judges fit.")
+            if st.button("Run AI analysis (~30s)", use_container_width=True):
+                from src import ai
+                with st.spinner("Free model reading the JD vs your resume…"):
+                    v = ai.analyze_job(job["url"], job["title"], job["company"])
+                if v:
+                    st.session_state["ai_verdict"] = v
+                    conn.execute("UPDATE jobs SET score=?, notes=? WHERE url=?",
+                                 (float(v.get("score_10", job["score"])), "AI-scored",
+                                  job["url"]))
+                    conn.commit()
+                else:
+                    from src import ai as _a
+                    st.warning("Free AI models are at their daily cap — the keyword "
+                               f"scores in step 2 still apply. ({_a.last_error() or 'busy'})")
+        with a2:
+            st.markdown("**✨ AI-tailored summary**")
+            lvl = st.slider("Tailoring strength (1 = light · 10 = strong reframe)",
+                            1, 10, 5, key="tailor_level",
+                            help="Higher lifts the ATS score but raises over-claim risk — "
+                                 "the authenticity check flags it.")
+            band = "Conservative" if lvl <= 3 else "Balanced" if lvl <= 7 else "Aggressive"
+            st.caption(f"Level {lvl}/10 — **{band}**")
+            if st.button("Tailor my resume (~30s)", use_container_width=True):
+                from src import ai
+                with st.spinner("Tailoring (all free models, then offline fallback)…"):
+                    s = ai.tailor_summary(job["url"], job["title"], job["company"],
+                                          band, intensity=lvl, emphasize=add_kw)
+                    mode = "AI"
+                    if not s:
+                        s = ai.tailor_summary_offline(job["url"], job["title"],
+                                                      job["company"])
+                        mode = "offline"
+                if s:
+                    st.session_state["ai_summary"] = s
+                    st.session_state["ai_summary_mode"] = mode
+                else:
+                    st.error("Could not tailor — check your OpenRouter key.")
+
+        if st.session_state.get("ai_verdict"):
+            v = st.session_state["ai_verdict"]
+            st.success(f"AI score: **{v.get('score_10','?')}/10** (saved to the table)")
+            st.write(f"**Recruiter view:** {v.get('recruiter_view','')}")
+            st.write(f"**Hiring-manager view:** {v.get('hiring_manager_view','')}")
+            v1, v2 = st.columns(2)
+            with v1:
+                st.markdown("**Strengths**")
+                for x in v.get("strengths", []):
+                    st.write("- " + str(x))
+            with v2:
+                st.markdown("**Gaps**")
+                for x in v.get("gaps", []):
+                    st.write("- " + str(x))
+            st.markdown("**Resume tweaks for this job**")
+            for x in v.get("resume_tweaks", []):
+                st.write("- " + str(x))
+
+        if st.session_state.get("ai_summary"):
+            from src import ai as _ai
+            tailored = st.session_state["ai_summary"]
+            if st.session_state.get("ai_summary_mode") == "offline":
+                st.warning("Free models were capped — used instant offline tailoring "
+                           "(keyword-matched, no fabrication).")
+            st.markdown("**✨ Tailored Professional Summary** — facts only, review before use")
+            st.info(tailored)
+
+            base_md = rz.load_cv_md()
+            tailored_md = re.sub(r"(## Professional Summary\s*\n).*?(\n## )",
+                                 r"\1" + tailored + r"\2", base_md, count=1, flags=re.S)
+            nf = jd_match.analyze(job["url"], job["title"], resume_override=tailored_md)
+            d1, d2, d3, d4 = st.columns(4)
+            d1.metric("Recruiter", f"{nf['recruiter']}/10",
+                      delta=round(nf["recruiter"] - fit["recruiter"], 1))
+            d2.metric("ATS / Workday", f"{nf['ats']}/10",
+                      delta=round(nf["ats"] - fit["ats"], 1))
+            d3.metric("Hiring manager", f"{nf['hiring_manager']}/10",
+                      delta=round(nf["hiring_manager"] - fit["hiring_manager"], 1))
+            d4.metric("Overall", f"{nf['overall']}/10",
+                      delta=round(nf["overall"] - fit["overall"], 1))
+            st.caption("Green = the tailored summary improved that score vs your base "
+                       "resume. Nudge the strength slider to trade fit against authenticity.")
+
+            warns = _ai.authenticity_check(tailored, base_md)
+            if warns:
+                st.error("⚠️ **Authenticity check — this may over-claim:**")
+                for w in warns:
+                    st.write("- " + w)
+                st.caption("Fix these before sending — over-claiming fails interviews "
+                           "and background checks. Try a lower strength.")
             else:
-                st.error("Could not tailor — check your OpenRouter key in career-ops/.env.")
+                st.success("✅ Authenticity check passed — every claim traces to your resume.")
 
-    if st.session_state.get("ai_verdict"):
-        v = st.session_state["ai_verdict"]
-        st.success(f"AI score: **{v.get('score_10','?')}/10** (saved to the table)")
-        st.write(f"**Recruiter view:** {v.get('recruiter_view','')}")
-        st.write(f"**Hiring-manager view:** {v.get('hiring_manager_view','')}")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**Strengths:**")
-            for s in v.get("strengths", []):
-                st.write("- " + str(s))
-        with c2:
-            st.markdown("**Gaps:**")
-            for s in v.get("gaps", []):
-                st.write("- " + str(s))
-        st.markdown("**Resume tweaks for this job:**")
-        for s in v.get("resume_tweaks", []):
-            st.write("- " + str(s))
+            from src.sources import slugify
+            st.download_button(
+                "⬇ Download AI-tailored resume (HTML → Ctrl+P → PDF)",
+                rz.tailored_resume_html(job["title"], job["company"],
+                                        summary_override=tailored),
+                f"resume-ai-{slugify(job['company'])[:28]}.html", "text/html",
+                use_container_width=True, type="primary")
 
-    if st.session_state.get("ai_summary"):
-        tailored = st.session_state["ai_summary"]
-        if st.session_state.get("ai_summary_mode") == "offline":
-            st.warning("Free AI models were at their daily cap — used instant offline "
-                       "tailoring (keyword-matched, no fabrication).")
-        st.markdown("**✨ AI-tailored Professional Summary** (facts only — review before use):")
-        st.info(tailored)
-
-        # ── Before → After scores for the tailored resume ──
-        import re as _re2
-        from src import ai as _ai2
-        base_md = rz.load_cv_md()
-        tailored_md = _re2.sub(r"(## Professional Summary\s*\n).*?(\n## )",
-                               r"\1" + tailored + r"\2", base_md, count=1, flags=_re2.S)
-        new_fit = jd_match.analyze(job["url"], job["title"], resume_override=tailored_md)
-        d1, d2, d3, d4 = st.columns(4)
-        d1.metric("Recruiter", f"{new_fit['recruiter']}/10",
-                  delta=round(new_fit['recruiter'] - fit['recruiter'], 1))
-        d2.metric("ATS/Workday", f"{new_fit['ats']}/10",
-                  delta=round(new_fit['ats'] - fit['ats'], 1))
-        d3.metric("Hiring-mgr", f"{new_fit['hiring_manager']}/10",
-                  delta=round(new_fit['hiring_manager'] - fit['hiring_manager'], 1))
-        d4.metric("OVERALL", f"{new_fit['overall']}/10",
-                  delta=round(new_fit['overall'] - fit['overall'], 1))
-        st.caption("Green = the tailored summary improved that score vs your base resume. "
-                   "Nudge the **Tailoring strength** slider and regenerate to trade fit vs authenticity.")
-
-        # ── Authenticity / over-claim guard ──
-        warns = _ai2.authenticity_check(tailored, base_md)
-        if warns:
-            st.error("⚠️ **Authenticity check — this tailored summary may over-claim:**")
-            for w in warns:
-                st.write("- " + w)
-            st.caption("Fix these before sending — over-claiming fails interviews and "
-                       "background checks. Try a lower Tailoring strength.")
-        else:
-            st.success("✅ Authenticity check passed — every claim traces to your base resume.")
-
-        from src.sources import slugify as _slug
-        html_ai = rz.tailored_resume_html(job["title"], job["company"],
-                                          summary_override=tailored)
-        st.download_button("⬇ Download AI-TAILORED resume (HTML → Ctrl+P → PDF)",
-                           html_ai, f"resume-ai-{_slug(job['company'])[:28]}.html",
-                           "text/html", use_container_width=True, type="primary")
-
-    st.divider()
-    stepper(4)
-    st.markdown("#### Step 4 — Get your documents & apply")
-    colL, colR = st.columns(2)
-    with colL:
-        st.markdown("##### 📄 ATS-clean resume")
-        st.caption("Emoji-free, plain formatting — safe for every ATS parser.")
-        html_doc = rz.tailored_resume_html(job["title"], job["company"])
+    # Step 4 — documents & apply
+    with s4:
         from src.sources import slugify
-        st.download_button("⬇ Download resume (HTML → Ctrl+P → PDF)",
-                           html_doc, f"resume-{slugify(job['company'])[:30]}.html",
-                           "text/html", use_container_width=True)
-        st.download_button("⬇ Download cover letter (.txt)",
-                           rz.cover_letter(job["title"], job["company"]),
-                           "cover-letter.txt", "text/plain", use_container_width=True)
-        if st.button("🤖 Queue for AI-tailored PDF (career-ops)", use_container_width=True):
-            st.info(rz.queue_for_ai_tailoring(job["url"]))
-        with st.expander("Preview tailored resume"):
-            components.html(html_doc, height=600, scrolling=True)
-    with colR:
-        st.markdown("##### ⚡ Apply kit — copy/paste blocks")
-        for label, text in rz.apply_kit().items():
-            st.caption(label)
-            st.code(text, language=None)
-        st.caption("Workday assisted apply (experimental — never auto-submits):")
-        if st.button("🚀 Launch assisted apply (opens Chrome)", use_container_width=True):
-            import subprocess, sys as _sys
-            subprocess.Popen([_sys.executable, "apply_assist.py", job["url"]],
-                             cwd=str(db.DB_PATH.parent.parent),
-                             creationflags=0x00000008)  # DETACHED_PROCESS
-            st.info("Chrome window opening... first visit per bank: sign in once, "
-                    "it stays saved. Review and press Submit yourself.")
-        st.caption("Mark it applied when done:")
-        if st.button("✅ Mark this job APPLIED (today)", use_container_width=True):
-            conn.execute("UPDATE jobs SET status='applied', date_applied=? WHERE url=?",
-                         (db.today(), job["url"]))
-            conn.commit()
-            st.success("Moved to ✅ Applied with today's date.")
-            st.rerun()
+        d1, d2 = st.columns(2)
+        with d1:
+            st.markdown("**📄 ATS-clean documents**")
+            st.caption("Emoji-free, plain formatting — safe for every ATS parser.")
+            html_doc = rz.tailored_resume_html(job["title"], job["company"])
+            st.download_button("⬇ Resume (HTML → Ctrl+P → PDF)", html_doc,
+                               f"resume-{slugify(job['company'])[:30]}.html",
+                               "text/html", use_container_width=True)
+            st.download_button("⬇ Cover letter (.txt)",
+                               rz.cover_letter(job["title"], job["company"]),
+                               "cover-letter.txt", "text/plain", use_container_width=True)
+            with st.expander("Preview resume"):
+                components.html(html_doc, height=560, scrolling=True)
+        with d2:
+            st.markdown("**⚡ Apply kit** — copy/paste blocks")
+            for label, text in rz.apply_kit().items():
+                with st.popover(label, use_container_width=True):
+                    st.code(text, language=None)
+            st.divider()
+            st.link_button("✅ Apply on employer site", job["apply_url"],
+                           use_container_width=True, type="primary")
+            st.caption("Assisted apply opens Chrome and fills what it can — "
+                       "it **never** submits for you.")
+            if st.button("🚀 Launch assisted apply", use_container_width=True):
+                import subprocess, sys
+                subprocess.Popen([sys.executable, "apply_assist.py", job["url"]],
+                                 cwd=str(db.DB_PATH.parent.parent),
+                                 creationflags=0x00000008)  # DETACHED_PROCESS
+                st.info("Chrome opening… sign in once per employer; it stays saved. "
+                        "Review and press Submit yourself.")
+            if st.button("✅ Mark this job applied (today)", use_container_width=True):
+                mark_applied(job["url"])
+                st.success("Moved to ✅ Applied with today's date.")
+                st.rerun()
 
-# ── Companies tab ───────────────────────────────────────────────────────────
-with tab_co:
-    st.caption("Auto-grows every scan. Careers pages let you check a company directly, even when boards miss it.")
-    co = load("""SELECT name, industry, job_count, careers_url, workday_url,
-                        sponsors_h1b, first_seen, last_seen, notes
+# ── Companies ───────────────────────────────────────────────────────────────
+with t_co:
+    ui.section("🏢 Employer directory",
+               "Auto-grows every scan. `ATS` is how they take applications — that's "
+               "what powers direct apply links.")
+    co = load("""SELECT name, industry, COALESCE(ats,'') ats, job_count, careers_url,
+                        workday_url, sponsors_h1b, first_seen, last_seen
                  FROM companies ORDER BY job_count DESC, last_seen DESC""")
-    kw2 = st.text_input("Filter companies")
+    kw2 = st.text_input("Search", placeholder="Filter companies…",
+                        key="co_kw", label_visibility="collapsed")
     if kw2:
         co = co[co["name"].str.contains(kw2, case=False, na=False)]
-    st.dataframe(
-        co, hide_index=True, use_container_width=True, height=560,
-        column_config={
-            "careers_url": st.column_config.LinkColumn("Careers", display_text="open ↗"),
-            "workday_url": st.column_config.LinkColumn("Workday API", display_text="json ↗"),
-            "job_count": st.column_config.NumberColumn("Jobs seen"),
-        },
-    )
+    st.dataframe(co, hide_index=True, use_container_width=True, height=520,
+                 column_config={
+                     "careers_url": st.column_config.LinkColumn("Careers",
+                                                                display_text="open ↗"),
+                     "workday_url": st.column_config.LinkColumn("Workday API",
+                                                                display_text="json ↗"),
+                     "ats": st.column_config.TextColumn("ATS",
+                            help="Applicant system we resolve apply links through."),
+                     "job_count": st.column_config.NumberColumn("Jobs seen"),
+                 })
     st.download_button("⬇ Export companies (CSV)", co.to_csv(index=False),
                        "company-directory.csv", "text/csv")
 
-# ── H-1B Sponsors tab ───────────────────────────────────────────────────────
-with tab_h1b:
+# ── Sponsors ────────────────────────────────────────────────────────────────
+with t_h1b:
     from src import sponsors as sp
-    st.caption("Sponsor-priority view: apply to **strong** sponsors first. "
-               "Seeds come from a curated BFSI map; live counts from public "
-               "H-1B disclosure data (h1bdata.info).")
-    h = load("""SELECT name, sponsors_h1b, job_count, careers_url
-                FROM companies ORDER BY
-                  CASE WHEN sponsors_h1b LIKE 'strong%'   THEN 0
-                       WHEN sponsors_h1b LIKE '%filings%' AND sponsors_h1b NOT LIKE '0 filings%' THEN 1
-                       WHEN sponsors_h1b LIKE 'moderate%' THEN 2
-                       WHEN sponsors_h1b = ''             THEN 3
-                       ELSE 4 END, job_count DESC""")
-    st.dataframe(
-        h, hide_index=True, use_container_width=True, height=480,
-        column_config={
-            "sponsors_h1b": st.column_config.TextColumn("H-1B verdict"),
-            "careers_url": st.column_config.LinkColumn("Careers", display_text="open ↗"),
-        },
-    )
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        if st.button("🔎 Live-lookup top unverified (15)"):
-            with st.spinner("Querying h1bdata.info (rate-limited, ~30s)..."):
+    ui.section("🎫 H-1B sponsor priority",
+               "Apply to **strong** sponsors first. Seeds from a curated BFSI map; "
+               "live counts from public H-1B disclosure data.")
+    h = load("""SELECT name, sponsors_h1b, job_count, careers_url FROM companies
+                ORDER BY CASE
+                  WHEN sponsors_h1b LIKE 'strong%' THEN 0
+                  WHEN sponsors_h1b LIKE '%filings%'
+                       AND sponsors_h1b NOT LIKE '0 filings%' THEN 1
+                  WHEN sponsors_h1b LIKE 'moderate%' THEN 2
+                  WHEN sponsors_h1b = '' THEN 3 ELSE 4 END, job_count DESC""")
+    st.dataframe(h, hide_index=True, use_container_width=True, height=440,
+                 column_config={
+                     "sponsors_h1b": st.column_config.TextColumn("H-1B verdict"),
+                     "careers_url": st.column_config.LinkColumn("Careers",
+                                                                display_text="open ↗"),
+                 })
+    q1, q2 = st.columns([1, 2])
+    with q1:
+        if st.button("🔎 Live-lookup top 15 unverified", use_container_width=True):
+            with st.spinner("Querying h1bdata.info (rate-limited, ~30s)…"):
                 n = sp.enrich_live(conn, limit=15, verbose=False)
             st.success(f"Updated {n} companies.")
             st.rerun()
-    with c2:
-        one = st.text_input("Or check one company", placeholder="e.g. Fannie Mae")
+    with q2:
+        one = st.text_input("Check one company", placeholder="e.g. Fannie Mae",
+                            label_visibility="collapsed")
         if one:
             cnt = sp.lookup_h1b(one)
-            st.write(f"**{one}**: {cnt if cnt is not None else 'lookup failed'} H-1B filings"
-                     if cnt is not None else "Lookup failed — try again.")
+            st.write(f"**{one}**: {cnt} H-1B filings" if cnt is not None
+                     else "Lookup failed — try again.")
 
-# ── Summary tab ─────────────────────────────────────────────────────────────
-with tab_sum:
+# ── Insights ────────────────────────────────────────────────────────────────
+with t_ins:
+    ui.section("📊 Pipeline", "Where every job you've found currently sits.")
     funnel = load("SELECT status, COUNT(*) n FROM jobs GROUP BY status")
     order = {s: i for i, s in enumerate(db.STATUSES)}
     funnel["o"] = funnel["status"].map(order).fillna(99)
     funnel = funnel.sort_values("o").drop(columns="o").set_index("status")
-    st.subheader("Pipeline")
-    st.bar_chart(funnel)
-    st.subheader("Top hiring companies")
-    st.dataframe(load("""SELECT company, COUNT(*) jobs,
-                                SUM(is_core) core_fit
-                         FROM jobs GROUP BY company
-                         ORDER BY jobs DESC LIMIT 25"""),
-                 hide_index=True, use_container_width=True)
-    alljobs = load("SELECT title,company,location,source,status,url FROM jobs")
-    st.download_button("⬇ Export all jobs (CSV / open in Excel)",
-                       alljobs.to_csv(index=False), "jobs.csv", "text/csv")
+    st.bar_chart(funnel, color="#4F46E5", height=260)
+
+    ui.section("🏆 Top hiring employers", "Who posts the most roles you match.")
+    st.dataframe(load("""SELECT company, COUNT(*) jobs, SUM(is_core) core_fit
+                         FROM jobs GROUP BY company ORDER BY jobs DESC LIMIT 25"""),
+                 hide_index=True, use_container_width=True, height=340)
+    st.download_button("⬇ Export all jobs (CSV)",
+                       load("SELECT title,company,location,source,status,salary,"
+                            "apply_url,url FROM jobs").to_csv(index=False),
+                       "jobs.csv", "text/csv")
