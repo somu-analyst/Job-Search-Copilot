@@ -72,6 +72,8 @@ def init(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE jobs ADD COLUMN date_applied TEXT DEFAULT ''")
     if "description" not in cols:
         conn.execute("ALTER TABLE jobs ADD COLUMN description TEXT DEFAULT ''")
+    if "salary" not in cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN salary TEXT DEFAULT ''")
     ccols = {r[1] for r in conn.execute("PRAGMA table_info(companies)")}
     if "industry" not in ccols:
         conn.execute("ALTER TABLE companies ADD COLUMN industry TEXT DEFAULT ''")
@@ -94,21 +96,42 @@ def enrich_industries(conn) -> int:
 
 
 def upsert_job(conn, *, url, title, company, location, source,
-               is_core=False, date_posted="", description="") -> bool:
-    """Insert a job if new. Returns True if it was newly added."""
+               is_core=False, date_posted="", description="", salary="") -> bool:
+    """Insert a job if new. Returns True if it was newly added.
+    salary is FYI only (shown when the posting lists one) — never a filter."""
     if not url:
         return False
     cur = conn.execute("SELECT 1 FROM jobs WHERE url = ?", (url,))
     if cur.fetchone():
         return False
+    desc = (description or "")[:12000]
+    if not salary and desc:
+        from .sources import salary_from_text
+        salary = salary_from_text(desc)
     conn.execute(
         """INSERT INTO jobs (url, title, company, location, source, is_core,
-                             date_found, date_posted, status, description)
-           VALUES (?,?,?,?,?,?,?,?,'new',?)""",
+                             date_found, date_posted, status, description, salary)
+           VALUES (?,?,?,?,?,?,?,?,'new',?,?)""",
         (url, title, company, location, source, 1 if is_core else 0,
-         today(), date_posted, (description or "")[:12000]),
+         today(), date_posted, desc, salary or ""),
     )
     return True
+
+
+def backfill_salary(conn) -> int:
+    """Fill salary (FYI) for existing rows that have a description but no salary."""
+    from .sources import salary_from_text
+    rows = conn.execute(
+        "SELECT url, description FROM jobs "
+        "WHERE (salary='' OR salary IS NULL) AND description!=''").fetchall()
+    n = 0
+    for url, desc in rows:
+        s = salary_from_text(desc or "")
+        if s:
+            conn.execute("UPDATE jobs SET salary=? WHERE url=?", (s, url))
+            n += 1
+    conn.commit()
+    return n
 
 
 def touch_company(conn, name, *, source="", careers_url="", workday_url="",

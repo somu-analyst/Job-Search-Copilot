@@ -172,3 +172,51 @@ def is_us_location(loc: str) -> bool:
     if any(s in low for s in _US_STATES):
         return True
     return bool(_US_ABBR & set(re.findall(r"\b([A-Z]{2})\b", l)))
+
+
+# ── Salary (FYI only — never used to filter, just displayed when listed) ──
+def fmt_salary(mn, mx, interval="") -> str:
+    """Format a structured min/max pay range from an API ('' if absent)."""
+    try:
+        mn = float(mn) if mn not in (None, "", 0, "0") else 0.0
+        mx = float(mx) if mx not in (None, "", 0, "0") else 0.0
+    except Exception:
+        return ""
+    if not mn and not mx:
+        return ""
+    suf = "/hr" if str(interval).lower().startswith("hour") else ""
+    lo, hi = (mn or mx), (mx or mn)
+    if lo and hi and hi != lo:
+        return f"${lo:,.0f}-${hi:,.0f}{suf}"
+    return f"${(lo or hi):,.0f}{suf}"
+
+
+def salary_from_text(text: str) -> str:
+    """Best-effort pull a listed pay range out of JD text ('' if none/uncertain).
+    Conservative: avoids notional figures like '$23B portfolio'."""
+    if not text:
+        return ""
+    t = text.replace("–", "-").replace("—", "-")
+    low = t.lower()
+    # $amount with optional K, NOT immediately followed by B/M/bn/mn/billion/million
+    pat = re.compile(
+        r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s?([kK])?"
+        r"(?!\s?(?:b|m|bn|mn|billion|million|trillion)\b)", re.I)
+    vals = []
+    for amt, k in pat.findall(t):
+        v = float(amt.replace(",", ""))
+        if k:
+            v *= 1000
+        vals.append(v)
+    annual = [v for v in vals if 30000 <= v <= 600000]
+    if len(annual) >= 2:
+        lo, hi = min(annual), max(annual)
+        return f"${lo:,.0f}-${hi:,.0f}" if hi > lo else f"${lo:,.0f}"
+    if len(annual) == 1:
+        return f"${annual[0]:,.0f}"
+    if ("hour" in low or "/hr" in low or "per hr" in low):
+        hourly = [v for v in vals if 15 <= v <= 300]
+        if len(hourly) >= 2:
+            lo, hi = min(hourly), max(hourly)
+            return f"${lo:,.0f}-${hi:,.0f}/hr" if hi > lo else f"${lo:,.0f}/hr"
+    return ""
