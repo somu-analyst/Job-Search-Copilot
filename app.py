@@ -508,16 +508,21 @@ with tab_resume:
                                "keyword scores and Highlights/Missing above still apply. "
                                f"({_ai.last_error() or 'all busy'}). Try again tomorrow.")
         with a2:
-            level = st.select_slider(
-                "Tailoring strength", options=["Conservative", "Balanced", "Aggressive"],
-                value="Balanced", key="tailor_level",
-                help="Conservative = light reorder · Aggressive = strong reframe toward "
-                     "the JD (still facts-only). More aggressive lifts the ATS score but "
-                     "raises over-claim risk — the authenticity check flags it.")
+            level_n = st.slider(
+                "Tailoring strength (1 = light touch · 10 = strong reframe)",
+                min_value=1, max_value=10, value=5, key="tailor_level",
+                help="1-3 = light reorder of existing wording · 4-7 = emphasize matching "
+                     "experience · 8-10 = strong reframe toward the JD (still facts-only). "
+                     "Higher lifts the ATS score but raises over-claim risk — the "
+                     "authenticity check flags it.")
+            level = ("Conservative" if level_n <= 3 else
+                     "Balanced" if level_n <= 7 else "Aggressive")
+            st.caption(f"Level {level_n}/10 — **{level}**")
             if st.button("✨ AI-tailored resume for this job (~30s)", use_container_width=True):
                 from src import ai
                 with st.spinner("Tailoring your summary (tries all free models, then offline)..."):
-                    new_summary = ai.tailor_summary(job["url"], job["title"], job["company"], level)
+                    new_summary = ai.tailor_summary(job["url"], job["title"], job["company"],
+                                                    level, intensity=level_n)
                     mode = "AI"
                     if not new_summary:
                         new_summary = ai.tailor_summary_offline(job["url"], job["title"], job["company"])
