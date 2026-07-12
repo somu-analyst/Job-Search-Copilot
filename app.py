@@ -163,12 +163,16 @@ with tab_jobs:
             kw = st.text_input("Search title/company")
             core_only = st.checkbox("Core-fit ★ only")
 
-    q = """SELECT jobs.rowid AS rowid, url, title, jobs.company AS company,
+    q = """SELECT jobs.rowid AS rowid, jobs.url AS url, jobs.title AS title,
+                  jobs.company AS company,
                   COALESCE(companies.industry,'') AS industry,
-                  location, score, date_posted, date_found, source, is_core,
-                  status, notes, date_applied
+                  jobs.location AS location, jobs.score AS score,
+                  jobs.date_posted AS date_posted, jobs.date_found AS date_found,
+                  jobs.source AS source, jobs.is_core AS is_core,
+                  jobs.status AS status, jobs.notes AS notes,
+                  jobs.date_applied AS date_applied
            FROM jobs LEFT JOIN companies ON jobs.company = companies.name
-           WHERE score >= ?"""
+           WHERE jobs.score >= ?"""
     p = [must_only and MUST_APPLY_AT or min_score]
     if industry_f:
         q += f" AND companies.industry IN ({','.join('?'*len(industry_f))})"; p += industry_f
