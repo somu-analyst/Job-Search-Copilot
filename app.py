@@ -40,7 +40,7 @@ def posted_days_ago(s) -> int | None:
 
 from src import db
 
-st.set_page_config(page_title="BFSI Job Hunter", page_icon="💼", layout="wide",
+st.set_page_config(page_title="Job Search Copilot", page_icon="🧭", layout="wide",
                    initial_sidebar_state="expanded")
 
 # ── Modern professional theme (classic banking blue) ────────────────────────
@@ -120,9 +120,10 @@ def load(sql, params=()):
 
 
 st.markdown(
-    "<div class='app-header'><h1>BFSI Job Hunter</h1>"
-    "<p>Fraud · Credit Risk · AML · Analytics — discovery, fit-scoring, "
-    "AI-tailored resumes & application tracking, all local and token-free.</p></div>",
+    "<div class='app-header'><h1>🧭 Job Search Copilot</h1>"
+    "<p>Your AI job-search copilot — <b>find · tailor · apply · track</b>. "
+    "Multi-source discovery, fit-scoring, AI-tailored resumes and application "
+    "tracking, all local and token-free.</p></div>",
     unsafe_allow_html=True)
 c = db.counts(conn)
 n_applied = conn.execute(
