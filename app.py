@@ -488,6 +488,15 @@ with tab_resume:
             st.write(", ".join(fit["missing"]) or "Nothing — full coverage!")
         st.caption("Keyword-based estimate ($0).")
 
+        add_kw = []
+        if fit["missing"]:
+            add_kw = st.multiselect(
+                "➕ Add to your AI-tailored resume — pick ONLY skills you genuinely have:",
+                fit["missing"], key="add_missing",
+                help="These get woven into the tailored summary below. The authenticity "
+                     "check still flags anything your base resume can't support, so only "
+                     "tick skills you can defend in an interview.")
+
         # ── AI deep analysis + AI tailoring (free OpenRouter models) ──────
         st.markdown("#### Step 3 — AI deep-dive & tailoring")
         a1, a2 = st.columns(2)
@@ -522,7 +531,7 @@ with tab_resume:
                 from src import ai
                 with st.spinner("Tailoring your summary (tries all free models, then offline)..."):
                     new_summary = ai.tailor_summary(job["url"], job["title"], job["company"],
-                                                    level, intensity=level_n)
+                                                    level, intensity=level_n, emphasize=add_kw)
                     mode = "AI"
                     if not new_summary:
                         new_summary = ai.tailor_summary_offline(job["url"], job["title"], job["company"])

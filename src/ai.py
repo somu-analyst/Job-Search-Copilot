@@ -192,16 +192,22 @@ _LEVELS = {
 
 
 def tailor_summary(url: str, title: str, company: str, level: str = "Balanced",
-                   intensity: int = 5) -> str:
+                   intensity: int = 5, emphasize: list | None = None) -> str:
     """Rewritten 4-line Professional Summary targeted at this job ('' on failure).
-    intensity 1-10 gives the model fine control over how hard to reframe."""
+    intensity 1-10 = how hard to reframe. emphasize = user-chosen skills to weave in."""
     jd = fetch_jd(url) or f"(Job title: {title} at {company})"
     resume = load_cv_md()
     style = _LEVELS.get(level, _LEVELS["Balanced"])
+    emph = ""
+    if emphasize:
+        emph = ("\nThe candidate CONFIRMS they have real experience with: "
+                + ", ".join(emphasize)
+                + ". Weave these in naturally where truthful — but if the resume gives "
+                "no basis for one, leave it out rather than fabricate.")
     prompt = f"""Rewrite this resume's Professional Summary for the specific job below.
 Tailoring intensity: {intensity} on a 1-10 scale ({level}). {style}
 At intensity 1 change almost nothing; at 10 reframe the whole summary around the
-job's top requirements. Scale your edits to match {intensity}.
+job's top requirements. Scale your edits to match {intensity}.{emph}
 Hard rules: max 4 lines; factual (use ONLY facts present in the resume — NEVER invent
 skills, numbers, employers, or titles); plain text; no emojis; no hype words
 (expert, world-class, guru, rockstar, 10x). Respond with ONLY the rewritten summary.
