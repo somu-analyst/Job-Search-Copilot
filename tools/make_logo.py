@@ -198,7 +198,86 @@ def opt_mark(size=S):
     return img
 
 
-OPTIONS = {1: opt_archer, 2: opt_upright, 3: opt_crossed, 4: opt_mark}
+def _archer_layer(box: int, arrow_color=ORANGE) -> Image.Image:
+    """Arjuna at full draw, aimed right, on a transparent square.
+
+    The arrow here is a PLAIN arrow, not a trishoolam: in the stacked mark the
+    trishoolam is its own element below, and drawing it twice made the tile read
+    as clutter rather than as two symbols."""
+    L = Image.new("RGBA", (box, box), (0, 0, 0, 0))
+    d = ImageDraw.Draw(L)
+    B = float(box)
+    w, limb = B * 0.042, B * 0.048
+    aim_y = B * 0.50
+
+    # bow: limbs curve toward the target, string is the chord behind
+    bx0, by0, bx1, by1 = B * 0.44, B * 0.06, B * 0.74, B * 0.94
+    d.arc([bx0, by0, bx1, by1], start=270, end=90, fill=CREAM, width=int(w))
+    cx_bow = (bx0 + bx1) / 2
+    grip = (bx1 - w * 0.4, aim_y)
+
+    # string at FULL DRAW -> a deep V back at the cheek
+    draw_hand = (B * 0.315, aim_y)
+    sw = max(2, int(w * 0.45))
+    d.line([(cx_bow, by0), draw_hand], fill=CREAM, width=sw)
+    d.line([(cx_bow, by1), draw_hand], fill=CREAM, width=sw)
+
+    # arrow: nocked at the draw hand, flying right past the grip
+    tipx = B * 0.99
+    d.line([(draw_hand[0], aim_y), (tipx - B * 0.06, aim_y)],
+           fill=arrow_color, width=int(w * 0.85))
+    hh = w * 1.15
+    d.polygon([(tipx, aim_y), (tipx - B * 0.085, aim_y - hh),
+               (tipx - B * 0.085, aim_y + hh)], fill=arrow_color)
+    # fletching
+    d.line([(draw_hand[0] + B * 0.01, aim_y - B * 0.045),
+            (draw_hand[0] + B * 0.06, aim_y)], fill=arrow_color, width=int(w * 0.5))
+    d.line([(draw_hand[0] + B * 0.01, aim_y + B * 0.045),
+            (draw_hand[0] + B * 0.06, aim_y)], fill=arrow_color, width=int(w * 0.5))
+
+    hx, hy, hr = B * 0.205, B * 0.275, B * 0.076
+    d.ellipse([hx - hr, hy - hr, hx + hr, hy + hr], fill=CREAM)
+    sh, hip = (B * 0.215, B * 0.395), (B * 0.205, B * 0.635)
+    d.line([sh, hip], fill=CREAM, width=int(limb * 1.8))
+    d.line([sh, grip], fill=CREAM, width=int(limb))          # locked-out bow arm
+    elbow = (B * 0.095, B * 0.450)                           # elbow behind body
+    d.line([sh, elbow], fill=CREAM, width=int(limb))
+    d.line([elbow, draw_hand], fill=CREAM, width=int(limb))
+    d.line([hip, (B * 0.330, B * 0.905)], fill=CREAM, width=int(limb))
+    d.line([hip, (B * 0.075, B * 0.905)], fill=CREAM, width=int(limb))
+    return L
+
+
+def _fit(layer: Image.Image, max_w: float, max_h: float) -> Image.Image:
+    """Crop a layer to its ink and scale it to fit a box, keeping aspect.
+    Without the crop, the transparent padding is what gets scaled and the two
+    elements overlap even though the maths says they shouldn't."""
+    bb = layer.getbbox()
+    if bb:
+        layer = layer.crop(bb)
+    k = min(max_w / layer.width, max_h / layer.height)
+    return layer.resize((max(1, int(layer.width * k)),
+                         max(1, int(layer.height * k))), Image.LANCZOS)
+
+
+def opt_stacked(size=S):
+    """Arjuna's bow ABOVE, Shiva's trishoolam BELOW — the two halves of the name,
+    each in its own zone so neither crowds the other."""
+    img = _shell(size)
+    S_ = float(size)
+
+    a = _fit(_archer_layer(int(S_ * 1.1)), S_ * 0.74, S_ * 0.40)     # top zone
+    img.alpha_composite(a, (int(S_ * 0.5 - a.width / 2),
+                            int(S_ * 0.10)))
+
+    t = _fit(trishool_layer(int(S_ * 0.9), shaft=0.30), S_ * 0.40, S_ * 0.36)
+    img.alpha_composite(t, (int(S_ * 0.5 - t.width / 2),
+                            int(S_ * 0.58)))                          # bottom zone
+    return img
+
+
+OPTIONS = {1: opt_archer, 2: opt_upright, 3: opt_crossed, 4: opt_mark,
+           5: opt_stacked}
 
 
 def write(choice: int = 1):
