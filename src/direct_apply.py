@@ -170,6 +170,8 @@ KNOWN_PORTALS: dict[str, tuple[str, str]] = {
     "citizens": ("radancy", "https://jobs.citizensbank.com"),
     "citizens bank": ("radancy", "https://jobs.citizensbank.com"),
     "citizens financial group": ("radancy", "https://jobs.citizensbank.com"),
+    "cvs health": ("workday",
+                   "cvshealth.wd1.myworkdayjobs.com|cvshealth|CVS_Health_Careers"),
 }
 
 
@@ -202,9 +204,12 @@ ALIASES = {
     "citigroup": "citi", "citibank": "citi", "citi bank": "citi",
     "citizens bank": "citizens", "citizens financial": "citizens",
     "jpmorgan chase": "jpmorgan", "jp morgan chase": "jpmorgan",
-    "j p morgan": "jpmorgan", "chase": "jpmorgan",
+    "jpmorganchase": "jpmorgan", "j p morgan": "jpmorgan", "chase": "jpmorgan",
+    "jpmorgan chase bank": "jpmorgan",
     "bank of america": "bofa", "merrill": "bofa",
     "wells fargo bank": "wells fargo",
+    "u s bank": "us bank", "us bancorp": "us bank", "usbank": "us bank",
+    "cvs": "cvs health", "cvs pharmacy": "cvs health",
 }
 
 
@@ -267,6 +272,9 @@ SEARCH_FALLBACKS = {
     "capital one": "https://www.capitalonecareers.com/search-jobs/{q}/",
     "goldman sachs": "https://higher.gs.com/results?search={q}",
     "hsbc": "https://mycareer.hsbc.com/en_GB/external/SearchJobs?keywords={q}",
+    "us bank": "https://careers.usbank.com/global/en/search-results?keywords={q}",
+    "deloitte": "https://apply.deloitte.com/careers/SearchJobs/{q}",
+    "cvs health": "https://jobs.cvshealth.com/search-jobs/{q}/",
 }
 
 
@@ -274,6 +282,15 @@ def search_fallback(company: str, title: str) -> str:
     """Employer careers-search deep link for a company we can't API-scrape."""
     tpl = SEARCH_FALLBACKS.get(_key(company))
     return tpl.format(q=quote(title, safe="")) if tpl else ""
+
+
+def web_fallback(company: str, title: str) -> str:
+    """Last resort for a job whose source is a REPOSTER (Lensa/Jooble/…) and
+    whose employer we can't map: a web search for the posting on the employer's
+    own site. Beats sending you to a reposter that may not even accept an
+    application."""
+    q = quote(f'"{title}" {company} careers apply', safe="")
+    return f"https://duckduckgo.com/?q={q}"
 
 
 def resolve_one(company: str, title: str, url: str, portal: tuple[str, str] | None = None) -> str:
@@ -304,7 +321,8 @@ def resolve_all(conn, limit: int = 2000, verbose: bool = True) -> dict:
            WHERE COALESCE(apply_url,'') = '' ORDER BY score DESC"""
     ).fetchall()
 
-    stats = {"direct": 0, "portal": 0, "search": 0, "careers": 0, "unresolved": 0}
+    stats = {"direct": 0, "portal": 0, "search": 0, "careers": 0,
+             "websearch": 0, "unresolved": 0}
     portals: dict[str, tuple[str, str]] = {}
     looked_up = 0
 
@@ -350,6 +368,10 @@ def resolve_all(conn, limit: int = 2000, verbose: bool = True) -> dict:
         if cr and (cr[0] or "").strip():
             conn.execute("UPDATE jobs SET apply_url=? WHERE url=?", (cr[0], url))
             stats["careers"] += 1
+        elif is_reposter(url) and company.strip():   # Tier 5 — never leave a reposter
+            conn.execute("UPDATE jobs SET apply_url=? WHERE url=?",
+                         (web_fallback(company, title), url))
+            stats["websearch"] += 1
         else:
             stats["unresolved"] += 1
         conn.commit()
@@ -359,5 +381,7 @@ def resolve_all(conn, limit: int = 2000, verbose: bool = True) -> dict:
         print(f"  apply links: {stats['direct']} already direct | "
               f"{stats['portal']} exact employer posting | "
               f"{stats['search']} employer search | "
-              f"{stats['careers']} careers page | {stats['unresolved']} none")
+              f"{stats['careers']} careers page | "
+              f"{stats['websearch']} web-search (was reposter) | "
+              f"{stats['unresolved']} none")
     return stats

@@ -1,9 +1,15 @@
 [theme]
-primaryColor = "#0f5ea8"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f4f7fb"
-textColor = "#1a2733"
+# Brand: indigo primary. The emerald accent (apply/success) is applied in CSS —
+# Streamlit's theme block only supports a single primary colour.
+primaryColor = "#4F46E5"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F8FAFC"
+textColor = "#0F172A"
 font = "sans serif"
+baseRadius = "0.75rem"
+
+[client]
+toolbarMode = "minimal"
 
 [server]
 headless = true
