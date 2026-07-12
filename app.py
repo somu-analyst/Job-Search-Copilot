@@ -109,9 +109,47 @@ with st.sidebar:
     st.divider()
     st.caption(f"DB: `{db.DB_PATH.name}` · statuses: {', '.join(db.STATUSES)}")
 
-tab_jobs, tab_applied, tab_resume, tab_co, tab_h1b, tab_sum = st.tabs(
-    ["📋 Jobs", "✅ Applied", "📄 Resume & Apply", "🏢 Companies",
+tab_today, tab_jobs, tab_applied, tab_resume, tab_co, tab_h1b, tab_sum = st.tabs(
+    ["🎯 Today", "📋 Jobs", "✅ Applied", "📄 Resume & Apply", "🏢 Companies",
      "🎫 H-1B Sponsors", "📊 Summary"])
+
+# ── Today tab: your action queue ────────────────────────────────────────────
+with tab_today:
+    new_today = conn.execute(
+        "SELECT COUNT(*) FROM jobs WHERE date_found = date('now') AND status='new'").fetchone()[0]
+    fire_new = conn.execute(
+        "SELECT COUNT(*) FROM jobs WHERE score>=8 AND status IN ('new','interested')").fetchone()[0]
+    waiting = conn.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status='applied'").fetchone()[0]
+    t1, t2, t3 = st.columns(3)
+    t1.metric("New today", new_today)
+    t2.metric("🔥 Must-apply waiting", fire_new)
+    t3.metric("Applied, awaiting response", waiting)
+
+    st.subheader("Apply next — your top 10 open opportunities")
+    nxt = load("""SELECT score, title, company,
+                         COALESCE(companies.industry,'') AS industry, location, url
+                  FROM jobs LEFT JOIN companies ON jobs.company = companies.name
+                  WHERE status IN ('new','interested')
+                  ORDER BY score DESC, date_found DESC LIMIT 10""")
+    st.dataframe(nxt, hide_index=True, use_container_width=True,
+                 column_config={"url": st.column_config.LinkColumn("Link", display_text="open ↗"),
+                                "score": st.column_config.NumberColumn("Fit", format="%.1f")})
+
+    st.subheader("Follow-ups due (applied 7+ days ago, no response)")
+    fu = load("""SELECT date_applied, title, company, url,
+                        CAST(julianday('now') - julianday(date_applied) AS INT) AS days_ago
+                 FROM jobs WHERE status='applied'
+                   AND date_applied != '' AND date_applied <= date('now','-7 days')
+                 ORDER BY date_applied""")
+    if fu.empty:
+        st.caption("None due — good.")
+    else:
+        st.dataframe(fu, hide_index=True, use_container_width=True,
+                     column_config={"url": st.column_config.LinkColumn("Link", display_text="open ↗"),
+                                    "days_ago": st.column_config.NumberColumn("Days ago")})
+        st.caption("Follow up on LinkedIn with the hiring manager or recruiter, "
+                   "or re-check the posting status.")
 
 # ── Jobs tab ────────────────────────────────────────────────────────────────
 from src.score import MUST_APPLY_AT
@@ -299,8 +337,60 @@ with tab_resume:
         with g2:
             st.markdown("**❌ Missing — JD asks, resume lacks:**")
             st.write(", ".join(fit["missing"]) or "Nothing — full coverage!")
-        st.caption("Keyword-based estimate ($0). For an LLM judgment, use the "
-                   "career-ops queue button below.")
+        st.caption("Keyword-based estimate ($0).")
+
+        # ── AI deep analysis + AI tailoring (free OpenRouter models) ──────
+        a1, a2 = st.columns(2)
+        with a1:
+            if st.button("🤖 AI deep analysis (free model, ~30s)", use_container_width=True):
+                from src import ai
+                with st.spinner("Free model reading the JD vs your resume..."):
+                    verdict = ai.analyze_job(job["url"], job["title"], job["company"])
+                if verdict:
+                    st.session_state["ai_verdict"] = verdict
+                    conn.execute("UPDATE jobs SET score=?, notes=? WHERE url=?",
+                                 (float(verdict.get("score_10", job["score"])),
+                                  "AI-scored", job["url"]))
+                    conn.commit()
+                else:
+                    st.error("Model call failed — free tier can be busy; try again.")
+        with a2:
+            if st.button("✨ AI-tailored resume for this job (~30s)", use_container_width=True):
+                from src import ai
+                with st.spinner("Rewriting your summary for this job..."):
+                    new_summary = ai.tailor_summary(job["url"], job["title"], job["company"])
+                if new_summary:
+                    st.session_state["ai_summary"] = new_summary
+                else:
+                    st.error("Model call failed — try again.")
+
+        if st.session_state.get("ai_verdict"):
+            v = st.session_state["ai_verdict"]
+            st.success(f"AI score: **{v.get('score_10','?')}/10** (saved to the table)")
+            st.write(f"**Recruiter view:** {v.get('recruiter_view','')}")
+            st.write(f"**Hiring-manager view:** {v.get('hiring_manager_view','')}")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Strengths:**")
+                for s in v.get("strengths", []):
+                    st.write("- " + str(s))
+            with c2:
+                st.markdown("**Gaps:**")
+                for s in v.get("gaps", []):
+                    st.write("- " + str(s))
+            st.markdown("**Resume tweaks for this job:**")
+            for s in v.get("resume_tweaks", []):
+                st.write("- " + str(s))
+
+        if st.session_state.get("ai_summary"):
+            st.markdown("**✨ AI-tailored Professional Summary** (facts only, review it):")
+            st.info(st.session_state["ai_summary"])
+            from src.sources import slugify as _slug
+            html_ai = rz.tailored_resume_html(job["title"], job["company"],
+                                              summary_override=st.session_state["ai_summary"])
+            st.download_button("⬇ Download AI-TAILORED resume (HTML → Ctrl+P → PDF)",
+                               html_ai, f"resume-ai-{_slug(job['company'])[:28]}.html",
+                               "text/html", use_container_width=True, type="primary")
 
         colL, colR = st.columns(2)
         with colL:

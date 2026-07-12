@@ -89,11 +89,17 @@ def _ats_clean(text: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", text)
 
 
-def tailored_resume_html(job_title: str = "", company: str = "") -> str:
-    """Master resume → standalone ATS-safe HTML (no emojis, no gimmicks)."""
+def tailored_resume_html(job_title: str = "", company: str = "",
+                         summary_override: str = "") -> str:
+    """Master resume → standalone ATS-safe HTML (no emojis, no gimmicks).
+    summary_override replaces the Professional Summary section (AI tailoring)."""
     md_text = load_cv_md()
     # strip html comments (TODO markers etc.) and emoji
     md_text = re.sub(r"<!--.*?-->", "", md_text, flags=re.S)
+    if summary_override:
+        md_text = re.sub(r"(## Professional Summary\s*\n).*?(\n## )",
+                         r"\1" + "\n" + summary_override.strip() + "\n" + r"\2",
+                         md_text, count=1, flags=re.S)
     md_text = _ats_clean(md_text)
     body = _md.markdown(md_text, extensions=["extra"])
     return (f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
