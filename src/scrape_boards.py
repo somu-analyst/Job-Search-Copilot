@@ -17,7 +17,7 @@ except ImportError:
     yaml = None
 
 from . import db
-from .sources import QUERIES, title_ok, is_core, is_us_location
+from .sources import QUERIES, title_ok, is_core, is_us_location, fmt_salary
 
 _CFG = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
 
@@ -75,7 +75,9 @@ def run(conn, *, hours_old=48, results_per_query=25, verbose=True) -> int:
                 if db.upsert_job(conn, url=url, title=title, company=company,
                                  location=loc, source=site, is_core=core,
                                  date_posted=str(r.get("date_posted") or ""),
-                                 description=str(r.get("description") or "")):
+                                 description=str(r.get("description") or ""),
+                                 salary=fmt_salary(r.get("min_amount"), r.get("max_amount"),
+                                                   str(r.get("interval") or ""))):
                     added += 1
                 db.touch_company(conn, company, source=site)
     conn.commit()

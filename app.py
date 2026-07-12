@@ -236,6 +236,7 @@ def render_job_board(kp, default_status=None, default_freshness="Any time"):
                   jobs.location AS location, jobs.score AS score,
                   jobs.date_posted AS date_posted, jobs.date_found AS date_found,
                   jobs.source AS source, jobs.is_core AS is_core,
+                  COALESCE(jobs.salary,'') AS salary,
                   jobs.status AS status, jobs.notes AS notes, jobs.date_applied AS date_applied
            FROM jobs LEFT JOIN companies ON jobs.company = companies.name
            WHERE jobs.score >= ?"""
@@ -280,11 +281,13 @@ def render_job_board(kp, default_status=None, default_freshness="Any time"):
                      help="1-10 match vs your target-role keywords, seniority, H-1B sponsor history"),
             "industry": st.column_config.TextColumn("Industry"),
             "title": st.column_config.TextColumn("Title", width="large"),
+            "salary": st.column_config.TextColumn("Salary (FYI)",
+                     help="Listed pay when the posting states one — informational only, never filtered."),
             "date_posted": st.column_config.TextColumn("Posted"),
             "date_found": st.column_config.TextColumn("Pulled"),
         },
         disabled=["🔥", "title", "company", "industry", "location", "source", "url",
-                  "score", "date_posted", "date_found"],
+                  "salary", "score", "date_posted", "date_found"],
         key=f"{kp}_editor",
     )
     if st.button("💾 Save changes", type="primary", key=f"{kp}_save"):

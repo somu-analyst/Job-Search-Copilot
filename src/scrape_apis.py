@@ -21,7 +21,7 @@ except ImportError:
     yaml = None
 
 from . import db
-from .sources import QUERIES, title_ok, is_core, is_us_location
+from .sources import QUERIES, title_ok, is_core, is_us_location, fmt_salary
 
 _CFG = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
 _HDR = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -58,7 +58,8 @@ def _adzuna(conn, app_id, app_key, verbose=True) -> int:
                 if db.upsert_job(conn, url=url, title=title, company=comp,
                                  location=loc, source="adzuna", is_core=is_core(title),
                                  date_posted=(j.get("created", "") or "")[:10],
-                                 description=j.get("description", "")):
+                                 description=j.get("description", ""),
+                                 salary=fmt_salary(j.get("salary_min"), j.get("salary_max"))):
                     added += 1
                 db.touch_company(conn, comp, source="adzuna")
         except Exception as e:
@@ -88,7 +89,8 @@ def _jooble(conn, key, verbose=True) -> int:
                                  location=j.get("location", ""), source="jooble",
                                  is_core=is_core(title),
                                  date_posted=(j.get("updated", "") or "")[:10],
-                                 description=j.get("snippet", "")):
+                                 description=j.get("snippet", ""),
+                                 salary=(j.get("salary", "") or "").strip()):
                     added += 1
                 db.touch_company(conn, comp, source="jooble")
         except Exception as e:
