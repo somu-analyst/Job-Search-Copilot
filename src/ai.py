@@ -118,7 +118,11 @@ def _chat(prompt: str, max_tokens=1400, passes=2) -> str:
     global _last_error
     _last_error = ""
     key = _key()
-    models = _free_models()[:6] if key else []   # best 6 only → fast
+    # Use ALL fast free (:free) models — no paid ones. Giant/slow models are
+    # already excluded in _free_models(), and we return on the first success,
+    # so a wide list only helps: when the top models are rate-limited (429s
+    # come back fast), it keeps falling through to the next free model.
+    models = _free_models() if key else []
     for attempt in range(passes):
         for model in models:
             try:
