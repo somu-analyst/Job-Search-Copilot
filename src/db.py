@@ -70,7 +70,25 @@ def init(conn: sqlite3.Connection) -> None:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)")}
     if "date_applied" not in cols:
         conn.execute("ALTER TABLE jobs ADD COLUMN date_applied TEXT DEFAULT ''")
+    ccols = {r[1] for r in conn.execute("PRAGMA table_info(companies)")}
+    if "industry" not in ccols:
+        conn.execute("ALTER TABLE companies ADD COLUMN industry TEXT DEFAULT ''")
     conn.commit()
+
+
+def enrich_industries(conn) -> int:
+    """Tag every directory company with an industry from the seed map."""
+    from .sources import industry_for
+    rows = conn.execute(
+        "SELECT name FROM companies WHERE industry='' OR industry IS NULL").fetchall()
+    n = 0
+    for (name,) in rows:
+        ind = industry_for(name)
+        if ind:
+            conn.execute("UPDATE companies SET industry=? WHERE name=?", (ind, name))
+            n += 1
+    conn.commit()
+    return n
 
 
 def upsert_job(conn, *, url, title, company, location, source,

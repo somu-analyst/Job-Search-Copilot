@@ -21,6 +21,10 @@ DEFAULT_QUERIES = [
     "SAS Viya", "data governance banking", "risk reporting analyst bank",
     "mortgage default servicing analytics", "banking analytics consultant",
     "financial services data analytics", "BFSI analytics",
+    "SAS programmer analyst", "SQL data analyst banking",
+    "Python data analyst financial services", "Tableau developer banking",
+    "compliance analyst bank", "regulatory reporting analyst",
+    "KYC AML analyst", "MIS reporting analyst banking",
 ]
 
 DEFAULT_POSITIVE = [
@@ -37,6 +41,7 @@ DEFAULT_POSITIVE = [
     "consulting", "data management", "data governance", "data quality",
     "data steward", "master data", "metadata", "data lineage", "insights",
     "data strategy", "migration", "modernization", "remediation",
+    "sql", "python", "tableau", "power bi", "viya",
 ]
 
 DEFAULT_NEGATIVE = [
@@ -85,6 +90,50 @@ def is_core(title: str) -> bool:
 
 def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+
+
+# ── Industry classification (substring match on company name) ──────────────
+INDUSTRY_MAP = {
+    "banking": ["citi", "pnc", "truist", "fifth third", "keybank", "huntington",
+                "jpmorgan", "chase", "bank of america", "wells fargo", "morgan stanley",
+                "goldman", "barclays", "deutsche", "hsbc", "ubs", "mufg", "mizuho",
+                "smbc", "santander", "bmo", "rbc", "state street", "bny", "northern trust",
+                "regions", "citizens", "m&t", "ally", "synchrony", "discover",
+                "american express", "capital one", "us bank", "u.s. bank", "credit union"],
+    "brokerage/asset mgmt": ["vanguard", "blackrock", "fidelity", "schwab",
+                             "raymond james", "ameriprise", "lpl", "edward jones",
+                             "invesco", "t. rowe", "franklin", "interactive brokers",
+                             "robinhood", "morningstar", "msci", "factset", "pgim"],
+    "insurance": ["travelers", "nationwide", "geico", "prudential", "aig", "voya",
+                  "massmutual", "hartford", "metlife", "chubb", "tiaa", "usaa",
+                  "new york life", "liberty mutual", "allstate", "state farm"],
+    "payments/cards": ["mastercard", "visa", "fiserv", "fis", "paypal", "stripe",
+                       "block", "square", "adyen", "marqeta", "global payments",
+                       "jack henry", "aci worldwide", "early warning"],
+    "credit bureau/data": ["transunion", "experian", "equifax", "fico", "moody",
+                           "s&p global", "lexisnexis", "bloomberg", "nasdaq", "dtcc",
+                           "broadridge", "ice", "nyse"],
+    "gse/mortgage": ["fannie mae", "freddie mac", "newrez", "mr. cooper", "rocket",
+                     "pennymac", "flagstar"],
+    "consulting": ["deloitte", "ey", "kpmg", "pwc", "accenture", "ibm", "capgemini",
+                   "cognizant", "tcs", "tata", "infosys", "wipro", "hcl", "genpact",
+                   "exl", "capco", "synechron", "fractal", "tiger analytics",
+                   "protiviti", "guidehouse", "crowe", "rsm", "fti", "oliver wyman",
+                   "mckinsey", "general dynamics"],
+    "fintech/vendor": ["sofi", "affirm", "chime", "plaid", "socure", "feedzai",
+                       "sardine", "unit21", "alloy", "sift", "datavisor", "forter",
+                       "signifyd", "riskified", "biocatch", "nice", "verafin",
+                       "pega", "temenos", "finastra", "ncino", "wolters kluwer",
+                       "symphonyai", "oracle", "intuit", "featurespace"],
+}
+
+
+def industry_for(company: str) -> str:
+    c = (company or "").lower()
+    for industry, keys in INDUSTRY_MAP.items():
+        if any(k in c for k in keys):
+            return industry
+    return ""
 
 
 # ── US location detection (primary search is USA) ──────────────────────────

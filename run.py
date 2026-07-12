@@ -39,6 +39,9 @@ def main() -> int:
     n_seed = sponsors.enrich_seeds(conn)
     if n_seed:
         print(f"  sponsor seeds applied to {n_seed} companies")
+    n_ind = db.enrich_industries(conn)
+    if n_ind:
+        print(f"  industry tagged for {n_ind} companies")
     if "--sponsors" in args:
         sponsors.enrich_live(conn)
     n_stale = db.archive_stale(conn)
