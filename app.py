@@ -508,20 +508,23 @@ with tab_resume:
                                "keyword scores and Highlights/Missing above still apply. "
                                f"({_ai.last_error() or 'all busy'}). Try again tomorrow.")
         with a2:
+            level = st.select_slider(
+                "Tailoring strength", options=["Conservative", "Balanced", "Aggressive"],
+                value="Balanced", key="tailor_level",
+                help="Conservative = light reorder · Aggressive = strong reframe toward "
+                     "the JD (still facts-only). More aggressive lifts the ATS score but "
+                     "raises over-claim risk — the authenticity check flags it.")
             if st.button("✨ AI-tailored resume for this job (~30s)", use_container_width=True):
                 from src import ai
                 with st.spinner("Tailoring your summary (tries all free models, then offline)..."):
-                    new_summary = ai.tailor_summary(job["url"], job["title"], job["company"])
+                    new_summary = ai.tailor_summary(job["url"], job["title"], job["company"], level)
                     mode = "AI"
                     if not new_summary:
                         new_summary = ai.tailor_summary_offline(job["url"], job["title"], job["company"])
                         mode = "offline"
                 if new_summary:
                     st.session_state["ai_summary"] = new_summary
-                    if mode == "offline":
-                        st.warning("Free AI models are at their daily cap — used the "
-                                   "instant offline tailoring instead (keyword-matched, "
-                                   "no fabrication). AI will work again tomorrow.")
+                    st.session_state["ai_summary_mode"] = mode
                 else:
                     st.error("Could not tailor — check your OpenRouter key in career-ops/.env.")
 
@@ -544,11 +547,46 @@ with tab_resume:
                 st.write("- " + str(s))
 
         if st.session_state.get("ai_summary"):
-            st.markdown("**✨ AI-tailored Professional Summary** (facts only, review it):")
-            st.info(st.session_state["ai_summary"])
+            tailored = st.session_state["ai_summary"]
+            if st.session_state.get("ai_summary_mode") == "offline":
+                st.warning("Free AI models were at their daily cap — used instant offline "
+                           "tailoring (keyword-matched, no fabrication).")
+            st.markdown("**✨ AI-tailored Professional Summary** (facts only — review before use):")
+            st.info(tailored)
+
+            # ── Before → After scores for the tailored resume ──
+            import re as _re2
+            from src import ai as _ai2
+            base_md = rz.load_cv_md()
+            tailored_md = _re2.sub(r"(## Professional Summary\s*\n).*?(\n## )",
+                                   r"\1" + tailored + r"\2", base_md, count=1, flags=_re2.S)
+            new_fit = jd_match.analyze(job["url"], job["title"], resume_override=tailored_md)
+            d1, d2, d3, d4 = st.columns(4)
+            d1.metric("Recruiter", f"{new_fit['recruiter']}/10",
+                      delta=round(new_fit['recruiter'] - fit['recruiter'], 1))
+            d2.metric("ATS/Workday", f"{new_fit['ats']}/10",
+                      delta=round(new_fit['ats'] - fit['ats'], 1))
+            d3.metric("Hiring-mgr", f"{new_fit['hiring_manager']}/10",
+                      delta=round(new_fit['hiring_manager'] - fit['hiring_manager'], 1))
+            d4.metric("OVERALL", f"{new_fit['overall']}/10",
+                      delta=round(new_fit['overall'] - fit['overall'], 1))
+            st.caption("Green = the tailored summary improved that score vs your base resume. "
+                       "Nudge the **Tailoring strength** slider and regenerate to trade fit vs authenticity.")
+
+            # ── Authenticity / over-claim guard ──
+            warns = _ai2.authenticity_check(tailored, base_md)
+            if warns:
+                st.error("⚠️ **Authenticity check — this tailored summary may over-claim:**")
+                for w in warns:
+                    st.write("- " + w)
+                st.caption("Fix these before sending — over-claiming fails interviews and "
+                           "background checks. Try a lower Tailoring strength.")
+            else:
+                st.success("✅ Authenticity check passed — every claim traces to your base resume.")
+
             from src.sources import slugify as _slug
             html_ai = rz.tailored_resume_html(job["title"], job["company"],
-                                              summary_override=st.session_state["ai_summary"])
+                                              summary_override=tailored)
             st.download_button("⬇ Download AI-TAILORED resume (HTML → Ctrl+P → PDF)",
                                html_ai, f"resume-ai-{_slug(job['company'])[:28]}.html",
                                "text/html", use_container_width=True, type="primary")
