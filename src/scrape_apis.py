@@ -68,7 +68,9 @@ def _adzuna(conn, app_id, app_key, verbose=True) -> int:
 
 def _jooble(conn, key, verbose=True) -> int:
     added = 0
-    for query in QUERIES:
+    # Jooble's free key has a ~500-request default cap — spend it on the
+    # 8 highest-yield queries only (16 requests/day at 2 runs)
+    for query in QUERIES[:8]:
         try:
             r = requests.post(f"https://jooble.org/api/{key}",
                               json={"keywords": query, "location": "USA"},
