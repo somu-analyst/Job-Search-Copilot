@@ -19,3 +19,4 @@ Thumbs.db
 # Secrets
 .env
 config/secrets.yml
+config/profile.yml
