@@ -247,19 +247,47 @@ def authenticity_check(tailored_summary: str, base_resume: str = "") -> list[str
         warns.append("Adds skills not found in your base resume — remove or verify: "
                      + ", ".join(sorted(set(added))[:8]))
 
-    base_nums = set(re.findall(r"\d+\s?%|\$\s?\d[\d,.]*\s?[kmb]?", base))
-    tl_nums = set(re.findall(r"\d+\s?%|\$\s?\d[\d,.]*\s?[kmb]?", tl))
+    # The SKILLS list can't know every technology. Anything that LOOKS like a tool
+    # or proper noun (capitalised mid-sentence, or an all-caps acronym) and isn't
+    # in the base resume is an invented claim — e.g. a model adding "Kubernetes"
+    # sailed straight through when we only checked the known vocabulary.
+    _STOP = {"i", "a", "the", "and", "or", "of", "in", "for", "with", "to", "at",
+             "on", "as", "by", "an", "my", "srinivasa", "rao", "somu"}
+    proper = re.findall(r"\b(?:[A-Z]{2,}|[A-Z][a-zA-Z0-9+.#/-]{2,})\b",
+                        tailored_summary or "")
+    # drop the first word of each sentence — capitalisation there means nothing
+    starts = {m.group(1) for m in
+              re.finditer(r"(?:^|[.!?]\s+)([A-Z][\w+.#/-]*)", tailored_summary or "")}
+    invented = sorted({p for p in proper
+                       if p not in starts
+                       and p.lower() not in _STOP
+                       and p.lower() not in base})
+    if invented:
+        warns.append("Names tools/terms that appear nowhere in your resume — "
+                     "remove unless you can defend them: " + ", ".join(invented[:8]))
+
+    # '87 percent' must be caught as readily as '87%' — a model that spells the
+    # unit out would otherwise smuggle an invented metric straight through.
+    _NUM = r"\d+(?:\.\d+)?\s?(?:%|percent)|\$\s?\d[\d,.]*\s?[kmb]?"
+    base_nums = {n.replace("percent", "%").replace(" ", "")
+                 for n in re.findall(_NUM, base)}
+    tl_nums = {n.replace("percent", "%").replace(" ", "")
+               for n in re.findall(_NUM, tl)}
     new_nums = tl_nums - base_nums
     if new_nums:
         warns.append("Introduces numbers/metrics not in your base resume — verify: "
                      + ", ".join(sorted(new_nums)[:8]))
 
+    # Only flag hype the TAILORING introduced. Wording already in the base resume
+    # is the candidate's own voice — flagging it ("expert", which his own summary
+    # uses) is a false alarm, and false alarms teach you to ignore the real ones.
     hype = ["expert", "world-class", "world class", "best-in-class", "guru", "ninja",
             "rockstar", "unparalleled", "revolutionary", "10x", "visionary",
-            "genius", "unmatched", "flawless"]
-    found = [h for h in hype if h in tl]
+            "genius", "unmatched", "flawless", "seasoned", "proven track record"]
+    found = [h for h in hype if h in tl and h not in base]
     if found:
-        warns.append("Overhyped language a recruiter distrusts — soften: " + ", ".join(found))
+        warns.append("Overhyped language the tailoring added (not in your resume) — "
+                     "soften: " + ", ".join(found))
 
     wc = len(tl.split())
     if wc > 90:

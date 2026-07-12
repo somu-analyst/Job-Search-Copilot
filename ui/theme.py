@@ -80,11 +80,12 @@ p,li,span,label{font-size:14px;}
 /* Identity left, system-flow right — the right side used to be dead space. */
 .hero-grid{display:flex;align-items:center;justify-content:space-between;
   gap:28px;flex-wrap:wrap;position:relative;z-index:1;}
-.hero-id{display:flex;align-items:center;gap:15px;}
-.hero-logo{width:56px;height:56px;border-radius:14px;flex:none;
-  box-shadow:0 4px 14px -3px rgba(0,0,0,.35);}
-.hero h1{color:#fff;margin:0;font-size:34px;font-weight:800;letter-spacing:-.03em;
-  line-height:1.05;}
+.hero-id{display:flex;align-items:center;gap:17px;}
+.hero-logo{width:70px;height:70px;border-radius:17px;flex:none;
+  box-shadow:0 5px 16px -3px rgba(0,0,0,.38);}
+.hero h1{color:#fff;margin:0;font-size:42px;font-weight:800;letter-spacing:-.035em;
+  line-height:1.02;white-space:nowrap;}
+@media (max-width:820px){ .hero h1{font-size:31px;white-space:normal;} }
 .hero p{margin:12px 0 0;opacity:.88;font-size:14px;max-width:680px;
   position:relative;z-index:1;}
 .hero .kicker{font-size:10.5px;font-weight:700;letter-spacing:.16em;

@@ -17,7 +17,7 @@ track + follow-up reminders.
 ## Why the Workday lane matters
 Most scrapers only hit Indeed/LinkedIn (and get blocked by Glassdoor/ZipRecruiter).
 Every Workday customer also exposes a **public JSON careers API**
-(`/wday/cxs/{tenant}/{site}/jobs`) — the same endpoint the bank's own careers page
+(`/wday/cxs/{tenant}/{site}/jobs`) — the same endpoint the employer's own careers page
 calls. It isn't bot-blocked and costs nothing. One run already pulls **400+ real jobs**
 straight from Citi, PNC, Mastercard, Fiserv, Morgan Stanley, State Street, FIS, Nasdaq.
 
@@ -35,7 +35,7 @@ streamlit run app.py     # open the tracker dashboard
  Google Jobs          │
                        ├─►  filter titles (config/profile.yml)  ─►  data/jobs.db
  Workday JSON API     │        + register every company             │
- (banks, verified)   ─┘          in the directory                   │
+ (verified tenants) ─┘          in the directory                   │
                                                                      ▼
                                                        Streamlit app (app.py)
                                               Jobs table · Company directory · Funnel
@@ -43,16 +43,16 @@ streamlit run app.py     # open the tracker dashboard
 
 - **`run.py`** — orchestrator. `--boards` / `--workday` for one lane; `--sponsors` adds live H-1B filing lookups. Every run also: scores all new jobs ($0 keyword model), applies sponsor seeds, archives stale unreviewed jobs (>21 days).
 - **`src/score.py`** — token-free fit score 0–5 (core-fit keywords + seniority + sponsor bonus). Jobs tab sorts by it.
-- **`src/sponsors.py`** — H-1B intelligence: curated BFSI sponsor map + live filing counts from public DOL disclosure data (h1bdata.info). Own tab in the app.
+- **`src/sponsors.py`** — H-1B intelligence: curated sponsor map (yours to edit) + live filing counts from public DOL disclosure data (h1bdata.info). Own tab in the app.
 - **`src/scrape_boards.py`** — JobSpy multi-site scraper (proxy-ready).
-- **`src/scrape_workday.py`** — Workday JSON feeder. Add banks by appending to
+- **`src/scrape_workday.py`** — Workday JSON feeder. Add employers by appending to
   `TENANTS`; use `python -m src.scrape_workday --probe <host> <tenant>` to find the site slug.
 - **`src/db.py`** — SQLite schema: `jobs` (with editable `status` = your tracker) + `companies` (auto-growing directory).
 - **`config/profile.yml`** — all keywords, search terms, sites, proxies. No code edits needed.
 
 ## The company directory
 Every company seen in any scrape is recorded once, with its careers page and Workday
-API URL when known. Over time this becomes your own map of who hires for BFSI
+API URL when known. Over time this becomes your own map of who hires for your field
 analytics — so you can check an employer directly even on days the boards miss it.
 Export to CSV from the Companies tab.
 
@@ -73,7 +73,7 @@ and leaves out the risky parts (see table). It is **not** a fork of any of them.
 | [can4hou6joeng4/boss-agent-cli](https://github.com/can4hou6joeng4/boss-agent-cli) | Agent for BOSS Zhipin (China board) | ❌ Not relevant to a US search |
 
 ## Roadmap (easy next steps for your frontend)
-1. **More Workday banks** — probe & add tenants (BofA, Truist, Capital One use non-obvious host numbers).
+1. **More Workday employers** — probe & add tenants (host numbers are often non-obvious).
 2. **Careers-page auto-resolve** — for each new company in the directory, look up its careers URL.
 3. **Optional AI scoring** — fill the `score` column via a free model (OpenRouter) or career-ops.
 4. **Resume tailoring / cover letters** — hand a chosen job to career-ops (`/career-ops pdf`).
