@@ -27,7 +27,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from src import db
+from src import db, tags
 from src.score import MUST_APPLY_AT
 import ui
 
@@ -98,6 +98,7 @@ def posted_days_ago(s) -> int | None:
 def _post_process():
     from src import score, sponsors, direct_apply
     score.score_all(conn, verbose=False)
+    tags.tag_all(conn, verbose=False)               # skill tags for the queue column
     sponsors.enrich_seeds(conn)
     db.enrich_industries(conn)
     db.backfill_salary(conn)
@@ -108,13 +109,19 @@ def _post_process():
 def _save_edits(df, edited, key_note="notes"):
     """Persist status/notes edits; stamp date_applied when a job turns applied."""
     n = 0
+    # Notes are no longer a grid column (they're edited in the row dialog), so a
+    # missing column means "unchanged", NOT "cleared". Without this guard the
+    # first save would blank every note in the table.
+    has_notes = key_note in edited.columns
     for i, row in edited.iterrows():
         orig = df.iloc[i]
+        was = orig[key_note] or ""
+        now = (row.get(key_note) or "") if has_notes else was
         status_changed = row["status"] != orig["status"]
-        notes_changed = (row.get(key_note) or "") != (orig[key_note] or "")
+        notes_changed = now != was
         if status_changed or notes_changed:
             conn.execute("UPDATE jobs SET status=?, notes=? WHERE rowid=?",
-                         (row["status"], row.get(key_note) or "", int(orig["rowid"])))
+                         (row["status"], now, int(orig["rowid"])))
             if status_changed and row["status"] in APPLIED_STATES \
                     and not (orig["date_applied"] or ""):
                 conn.execute("UPDATE jobs SET date_applied=? WHERE rowid=?",
@@ -137,12 +144,23 @@ def job_dialog(row: dict):
     st.markdown(f"### {row['title']}")
     st.caption(f"{row['company']} · {row['location'] or '—'} · "
                f"{row.get('industry') or '—'}")
+    # Skills lead the chips: they're the reason the fit score is what it is.
+    tag_chips = [(t, "p") for t in (row.get("tags") or "").split(", ") if t]
     st.markdown(ui.chips([
         (f"{row['score']:.1f}/10 fit", ui.score_kind(row["score"])),
         ("MUST APPLY", "w") if row["score"] >= MUST_APPLY_AT else ("", ""),
+        *tag_chips,
         (row.get("salary") or "", "p"),
-        (row.get("source") or "", "n"),
     ]), unsafe_allow_html=True)
+
+    # Provenance — pulled OUT of the table so it can't eat screen width there,
+    # but it still has to live somewhere, and this is where you look when a job
+    # smells stale ("posted 92 days ago on an aggregator" is a real answer).
+    st.caption(f"Source: **{row.get('source') or '—'}** · posted "
+               f"{row.get('date_posted') or 'unknown'} · pulled "
+               f"{row.get('date_found') or '—'}")
+    if (row.get("notes") or "").strip():
+        st.info(row["notes"])
 
     jd = jdm.fetch_jd(row["url"]) or (row.get("description") or "")
     flags = jdm.jd_flags(jd)
@@ -173,12 +191,23 @@ def job_dialog(row: dict):
 # ── the jobs board (filters in a popover; table stays the hero) ─────────────
 def job_board(kp: str, default_status=None, height=460):
     default_status = default_status if default_status is not None else ["new", "interested"]
-    bar_l, bar_r = st.columns([3, 1.15])
+    # Skills sit in the TOP bar, not the popover: "which of these is a SAS job?"
+    # is the question you ask on every pass, and a filter you use constantly
+    # should never be two clicks deep.
+    bar_l, bar_m, bar_r = st.columns([2, 2.2, 1.15])
     with bar_l:
         kw = st.text_input("Search", placeholder="Search title or company…",
                            key=f"{kp}_kw", label_visibility="collapsed")
+    with bar_m:
+        skills_f = st.multiselect(
+            "Skills", tags.ALL_TAGS, key=f"{kp}_skills",
+            placeholder="Skills — SAS, AML, Credit Risk…", label_visibility="collapsed")
     with bar_r:
         with st.popover("⚙️ Filters", use_container_width=True):
+            skills_all = st.checkbox(
+                "Match ALL selected skills", key=f"{kp}_skills_all",
+                help="Off = any of them (wider). On = only jobs with every one "
+                     "you picked (narrow — use when you know exactly what you want).")
             status_f = st.multiselect("Status", db.STATUSES, default=default_status,
                                       key=f"{kp}_status")
             c1, c2 = st.columns(2)
@@ -207,11 +236,20 @@ def job_board(kp: str, default_status=None, height=460):
                   jobs.source AS source, jobs.is_core AS is_core,
                   COALESCE(jobs.salary,'') AS salary,
                   COALESCE(NULLIF(jobs.apply_url,''), jobs.url) AS apply_url,
+                  COALESCE(jobs.tags,'') AS tags,
                   jobs.status AS status, jobs.notes AS notes,
                   jobs.date_applied AS date_applied
            FROM jobs LEFT JOIN companies ON jobs.company = companies.name
            WHERE jobs.score >= ?"""
     p = [must_only and MUST_APPLY_AT or min_score]
+    if skills_f:
+        # LIKE on the cached tag string. Wrapped in ", " on both sides so "R"
+        # can't match inside "Credit Risk" and "ML" can't match inside "AML" —
+        # a substring match here would quietly poison the one filter you trust.
+        joiner = " AND " if skills_all else " OR "
+        clause = joiner.join(["(', '||jobs.tags||', ') LIKE ?"] * len(skills_f))
+        q += f" AND ({clause})"
+        p += [f"%, {s}, %" for s in skills_f]
     if industry_f:
         q += f" AND companies.industry IN ({','.join('?'*len(industry_f))})"; p += industry_f
     if status_f:
@@ -242,29 +280,53 @@ def job_board(kp: str, default_status=None, height=460):
 
     st.caption(f"**{len(df)} jobs** · set **Status → applied** and it moves to "
                f"Applied with today's date. 🔥 = fit ≥ {MUST_APPLY_AT:.0f}.")
-    view = df.drop(columns=["rowid", "is_core", "date_applied"]).copy()
-    view.insert(0, "score", view.pop("score"))
-    view.insert(0, "🔥", (df["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""}))
+    # Eight columns, chosen to fit a laptop screen with NO horizontal scroll.
+    # Ordered by what you decide with, left to right:
+    #   is it hot -> how well does it fit -> the button -> what is it -> who ->
+    #   what skills -> where -> what have I done about it
+    # Everything cut from here is provenance, not decision material — source,
+    # posted/pulled dates, industry, notes. They still exist; they moved into the
+    # row dialog, one click away, where they cost you no screen width.
+    #
+    # Salary is cut too, reluctantly: only 0.4% of postings list one, so as a
+    # column it is blank on 99.6% of rows while charging full width. It survives
+    # as a chip in the row dialog, which is the right home for something you look
+    # up about ONE job rather than scan down a list.
+    # Status sits early, not last. The grid always keeps a ~14px gutter on its
+    # right edge, so whatever column ends up last gets shaved — and Status is the
+    # one column here you actually EDIT. Location is the one that can afford to
+    # lose a few pixels, so Location goes last.
+    COLS = ["🔥", "score", "apply_url", "status", "title", "company",
+            "tags", "location"]
+    view = df.copy()
+    view["🔥"] = (df["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
+    view = view[COLS]
     edited = st.data_editor(
         view, hide_index=True, use_container_width=True, height=height,
         column_config={
             "🔥": st.column_config.TextColumn("🔥", width="small"),
-            "apply_url": st.column_config.LinkColumn(
-                "Apply", display_text="apply ↗",
-                help="Direct link to the employer's own application page — "
-                     "skips third-party reposters."),
-            "url": st.column_config.LinkColumn("Source", display_text="src ↗"),
-            "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES),
             "score": st.column_config.NumberColumn("Fit", format="%.1f", width="small",
                      help="1-10 match vs your keywords, seniority, H-1B sponsor history"),
-            "title": st.column_config.TextColumn("Title", width="large"),
-            "salary": st.column_config.TextColumn("Salary (FYI)",
-                     help="Shown when the posting lists pay. Never used to filter."),
-            "date_posted": st.column_config.TextColumn("Posted"),
-            "date_found": st.column_config.TextColumn("Pulled"),
+            "apply_url": st.column_config.LinkColumn(
+                "Apply", display_text="apply ↗", width="small",
+                help="Direct link to the employer's own application page — "
+                     "skips third-party reposters."),
+            # No width hints on the text columns. A fixed width is a PROMISE the
+            # container may not be able to keep: the hints summed past the grid's
+            # own width, so the last column (Status — the one you actually edit)
+            # fell off the right edge. Left unset, they share out whatever space
+            # is left after the small fixed ones.
+            "title": st.column_config.TextColumn("Title"),
+            "company": st.column_config.TextColumn("Company"),
+            "tags": st.column_config.TextColumn(
+                "Skills",
+                help="What the job is actually about, pulled from the title and JD. "
+                     "Filter on these in the bar above."),
+            "location": st.column_config.TextColumn("Location"),
+            "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES,
+                     width="small"),
         },
-        disabled=["🔥", "title", "company", "industry", "location", "source", "url",
-                  "apply_url", "salary", "score", "date_posted", "date_found"],
+        disabled=[c for c in COLS if c != "status"],   # only Status is editable here
         key=f"{kp}_editor")
     if st.button("💾 Save changes", key=f"{kp}_save"):
         st.success(f"Saved {_save_edits(df, edited)} change(s).")

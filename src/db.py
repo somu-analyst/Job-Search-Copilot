@@ -98,6 +98,8 @@ def init(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE jobs ADD COLUMN salary TEXT DEFAULT ''")
     if "apply_url" not in cols:
         conn.execute("ALTER TABLE jobs ADD COLUMN apply_url TEXT DEFAULT ''")
+    if "tags" not in cols:      # skill tags (AML, SAS, Credit Risk …) — see src/tags.py
+        conn.execute("ALTER TABLE jobs ADD COLUMN tags TEXT DEFAULT ''")
     ccols = {r[1] for r in conn.execute("PRAGMA table_info(companies)")}
     if "industry" not in ccols:
         conn.execute("ALTER TABLE companies ADD COLUMN industry TEXT DEFAULT ''")
