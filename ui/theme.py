@@ -60,14 +60,19 @@ CSS = """
 html,body,[class*="css"]{font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;
   color:var(--body);-webkit-font-smoothing:antialiased;}
 
-/* ── Type scale ─────────────────────────────────────────────── */
-h1{font-size:27px;font-weight:800;color:var(--ink);letter-spacing:-.025em;}
-h2{font-size:20px;font-weight:700;color:var(--ink);letter-spacing:-.015em;}
-h3{font-size:17px;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
-h4{font-size:14.5px;font-weight:700;color:var(--ink);margin:4px 0 2px;}
-h5{font-size:12px;font-weight:700;color:var(--faint);
+/* ── Type scale ─────────────────────────────────────────────────
+   Lifted a full step across the board: the app was set at 13–14px, which is
+   fine for a dense internal tool and too small for something you look at all
+   day. Body sits at 15.5px, headings scale from it. */
+h1{font-size:31px;font-weight:800;color:var(--ink);letter-spacing:-.025em;}
+h2{font-size:23px;font-weight:700;color:var(--ink);letter-spacing:-.015em;}
+h3{font-size:19.5px;font-weight:700;color:var(--ink);letter-spacing:-.012em;}
+h4{font-size:16.5px;font-weight:700;color:var(--ink);margin:6px 0 3px;}
+h5{font-size:13px;font-weight:700;color:var(--faint);
    text-transform:uppercase;letter-spacing:.07em;}
-p,li,span,label{font-size:14px;}
+p,li,span,label,div[data-testid="stMarkdownContainer"] p{font-size:15.5px;}
+[data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p{
+  font-size:13.5px!important;}
 
 /* ── Hero: gradient, restrained, states what the app does ───── */
 /* Glassdoor's dark slate-green: the pure green arrives late, as an accent —
@@ -77,44 +82,54 @@ p,li,span,label{font-size:14px;}
   box-shadow:var(--sh-md);position:relative;overflow:hidden;}
 .hero:after{content:"";position:absolute;right:-70px;top:-70px;width:250px;height:250px;
   background:radial-gradient(circle,rgba(255,255,255,.13),transparent 68%);}
-/* Identity left, system-flow right — the right side used to be dead space. */
+/* Identity left, system-flow right. The flow is CENTRED against the full hero
+   height — it used to hug the top and leave a dead band underneath. */
 .hero-grid{display:flex;align-items:center;justify-content:space-between;
-  gap:28px;flex-wrap:wrap;position:relative;z-index:1;}
-.hero-id{display:flex;align-items:center;gap:17px;}
-.hero-logo{width:70px;height:70px;border-radius:17px;flex:none;
-  box-shadow:0 5px 16px -3px rgba(0,0,0,.38);}
-.hero h1{margin:0;font-size:52px;font-weight:800;letter-spacing:-.04em;
-  line-height:1.0;white-space:nowrap;}
-.hero h1 .w1{color:#F2FBF5;}                      /* cool white, reads on green */
-.hero h1 .w2{color:#FFD166;                        /* warm gold — sings on green */
-  text-shadow:0 2px 14px rgba(255,209,102,.28);}
-@media (max-width:1000px){ .hero h1{font-size:40px;} }
-@media (max-width:820px){ .hero h1{font-size:32px;white-space:normal;} }
-.hero p{margin:12px 0 0;opacity:.88;font-size:14px;max-width:680px;
-  position:relative;z-index:1;}
-.hero .kicker{font-size:10.5px;font-weight:700;letter-spacing:.16em;
-  text-transform:uppercase;opacity:.72;margin-bottom:3px;}
+  gap:34px;flex-wrap:wrap;position:relative;z-index:1;}
+.hero-left{flex:1 1 420px;min-width:330px;}
+.hero-id{display:flex;align-items:center;gap:19px;}
+.hero-logo{width:84px;height:84px;border-radius:20px;flex:none;
+  box-shadow:0 6px 18px -3px rgba(0,0,0,.40);}
+/* !important on purpose: Streamlit ships its own h1 rule at the SAME specificity
+   as `.hero h1`, so which wins comes down to stylesheet load order — and ours
+   silently lost. This is the one place in the sheet where we force it. */
+/* clamp() rather than fixed px + media queries: it scales with the viewport and
+   can't be caught out by a breakpoint that happens to sit near the user's window
+   width — which is how this kept landing "small" for him at ~1100px. */
+.hero h1{margin:0!important;font-size:clamp(40px,5.4vw,82px)!important;
+  font-weight:800!important;letter-spacing:-.042em!important;
+  line-height:1.02!important;padding:0!important;}
+.hero h1 .w1{color:#F2FBF5!important;}             /* cool white, reads on green */
+.hero h1 .w2{color:#FFD166!important;              /* warm gold — sings on green */
+  text-shadow:0 3px 20px rgba(255,209,102,.32);}
+.hero p{margin:16px 0 0!important;opacity:.9;font-size:17px!important;
+  max-width:660px;position:relative;z-index:1;line-height:1.55;}
+.hero .kicker{font-size:12px;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;opacity:.78;margin-bottom:6px;}
 
 /* The five-stage flow: the whole system at a glance, so a new user gets it
-   before scrolling. Hidden on narrow screens rather than wrapping into mush. */
-.hero-flow{display:flex;align-items:flex-start;gap:2px;}
-.fl-step{text-align:center;min-width:64px;}
-.fl-dot{width:24px;height:24px;border-radius:50%;margin:0 auto 5px;
-  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.32);
-  color:#fff;font-size:11px;font-weight:800;line-height:23px;}
-.fl-lab{font-size:12.5px;font-weight:700;color:#fff;letter-spacing:-.01em;}
-.fl-sub{font-size:9.5px;color:rgba(255,255,255,.6);margin-top:1px;line-height:1.25;}
-.fl-arw{color:rgba(255,255,255,.38);font-size:13px;padding-top:2px;}
-@media (max-width:1150px){ .hero-flow{display:none;} }
+   before scrolling. Boxed steps, centred against the hero's full height. */
+.hero-flow{display:flex;align-items:stretch;gap:5px;flex:none;}
+.fl-step{text-align:center;min-width:92px;padding:13px 9px 12px;
+  background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);
+  border-radius:12px;display:flex;flex-direction:column;justify-content:center;}
+.fl-dot{width:30px;height:30px;border-radius:50%;margin:0 auto 8px;
+  background:rgba(255,255,255,.20);border:1px solid rgba(255,255,255,.38);
+  color:#fff;font-size:14px;font-weight:800;line-height:29px;}
+.fl-lab{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.01em;}
+.fl-sub{font-size:11.5px;color:rgba(255,255,255,.72);margin-top:3px;
+  line-height:1.3;}
+.fl-arw{color:rgba(255,255,255,.45);font-size:17px;align-self:center;padding:0 2px;}
+@media (max-width:1250px){ .hero-flow{display:none;} }
 
 /* ── KPI strip ──────────────────────────────────────────────── */
 [data-testid="stMetric"]{background:var(--sf);border:1px solid var(--line);
   border-radius:var(--r);padding:14px 16px;box-shadow:var(--sh);transition:.16s;}
 [data-testid="stMetric"]:hover{border-color:var(--p-bd);transform:translateY(-1px);
   box-shadow:var(--sh-md);}
-[data-testid="stMetricLabel"] p{font-size:11px;color:var(--muted);font-weight:700;
+[data-testid="stMetricLabel"] p{font-size:12.5px;color:var(--muted);font-weight:700;
   text-transform:uppercase;letter-spacing:.06em;}
-[data-testid="stMetricValue"]{color:var(--ink);font-weight:800;font-size:26px;
+[data-testid="stMetricValue"]{color:var(--ink);font-weight:800;font-size:31px;
   letter-spacing:-.03em;}
 
 /* ── Job card: the core product object ──────────────────────── */
@@ -122,12 +137,12 @@ p,li,span,label{font-size:14px;}
   padding:15px 17px;margin-bottom:9px;box-shadow:var(--sh);transition:.16s;}
 .jcard:hover{border-color:var(--p-bd);box-shadow:var(--sh-md);transform:translateY(-1px);}
 .jcard.hot{border-left:3px solid var(--w);}
-.jcard .t{font-size:15.5px;font-weight:700;color:var(--ink);letter-spacing:-.01em;
+.jcard .t{font-size:17px;font-weight:700;color:var(--ink);letter-spacing:-.01em;
   line-height:1.32;}
-.jcard .m{color:var(--muted);font-size:12.5px;margin-top:3px;}
+.jcard .m{color:var(--muted);font-size:13.5px;margin-top:3px;}
 
 /* ── Chips / badges ─────────────────────────────────────────── */
-.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;
+.chip{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12.5px;
   font-weight:700;margin:5px 5px 0 0;border:1px solid transparent;line-height:1.7;}
 .chip-p{background:var(--p-sf);color:var(--p-dk);border-color:var(--p-bd);}
 .chip-a{background:var(--a-sf);color:var(--a-dk);border-color:var(--a-bd);}
@@ -138,16 +153,17 @@ p,li,span,label{font-size:14px;}
 /* ── Tabs: segmented control ────────────────────────────────── */
 .stTabs [data-baseweb="tab-list"]{gap:2px;background:var(--sf);padding:5px;
   border-radius:var(--r);border:1px solid var(--line);box-shadow:var(--sh);}
-.stTabs [data-baseweb="tab"]{border-radius:var(--r-sm);padding:8px 15px;
-  font-weight:600;font-size:13.5px;color:var(--muted);transition:.15s;}
+.stTabs [data-baseweb="tab"]{border-radius:var(--r-sm);padding:10px 17px;
+  font-weight:600;font-size:15px;color:var(--muted);transition:.15s;}
 .stTabs [data-baseweb="tab"]:hover{background:#F1F5F3;color:var(--ink);}
 .stTabs [aria-selected="true"]{background:var(--p)!important;color:#fff!important;}
 .stTabs [data-baseweb="tab-highlight"],.stTabs [data-baseweb="tab-border"]{display:none;}
 
 /* ── Buttons: quiet default, ONE orange CTA per view ────────── */
 .stButton>button,.stLinkButton>a,.stDownloadButton>button{
-  border-radius:var(--r-sm);font-weight:600;font-size:13.5px;border:1px solid var(--line);
-  background:var(--sf);color:var(--body);box-shadow:var(--sh);transition:.15s;}
+  border-radius:var(--r-sm);font-weight:700;font-size:15px;border:1px solid var(--line);
+  background:var(--sf);color:var(--body);box-shadow:var(--sh);transition:.15s;
+  padding:.5rem 1rem;}
 .stButton>button:hover,.stLinkButton>a:hover,.stDownloadButton>button:hover{
   border-color:var(--p);color:var(--p);background:var(--p-sf);transform:translateY(-1px);}
 .stButton>button[kind="primary"],.stLinkButton>a[kind="primary"],
@@ -163,25 +179,25 @@ p,li,span,label{font-size:14px;}
 div[data-testid="stVerticalBlockBorderWrapper"],[data-testid="stPopoverBody"]{
   border:1px solid var(--line);border-radius:var(--r);background:var(--sf);
   box-shadow:var(--sh);}
-[data-testid="stDataFrame"]{overflow:hidden;}
+[data-testid="stDataFrame"]{overflow:hidden;font-size:14.5px;}
 [data-testid="stDialog"] div[role="dialog"]{border-radius:var(--r-lg);
   box-shadow:0 24px 60px -12px rgba(15,23,42,.3);border:1px solid var(--line);}
 
 /* ── Inputs: hairline, ring only on focus ───────────────────── */
 .stTextInput input,.stNumberInput input,.stTextArea textarea{
-  border-radius:var(--r-sm);border:1px solid var(--line);font-size:13.5px;}
+  border-radius:var(--r-sm);border:1px solid var(--line);font-size:15px;}
 .stTextInput input:focus,.stTextArea textarea:focus{
   border-color:var(--p);box-shadow:0 0 0 3px rgba(12,170,65,.14);}
 .stSelectbox div[data-baseweb="select"]>div,
 .stMultiSelect div[data-baseweb="select"]>div{
   border-radius:var(--r-sm);border:1px solid var(--line)!important;
-  background:var(--sf)!important;min-height:40px;cursor:pointer;font-size:13.5px;
+  background:var(--sf)!important;min-height:44px;cursor:pointer;font-size:15px;
   transition:.15s;}
 .stSelectbox div[data-baseweb="select"]>div:hover,
 .stMultiSelect div[data-baseweb="select"]>div:hover{
   border-color:var(--p)!important;background:var(--p-sf)!important;}
 .stSelectbox label,.stTextInput label,.stMultiSelect label,.stSlider label,
-.stCheckbox label,.stRadio label{font-weight:600;color:var(--body);font-size:13px;}
+.stCheckbox label,.stRadio label{font-weight:600;color:var(--body);font-size:14.5px;}
 
 /* ── Sidebar: secondary controls only ───────────────────────── */
 [data-testid="stSidebar"]{background:var(--sf);border-right:1px solid var(--line);}
@@ -189,7 +205,7 @@ div[data-testid="stVerticalBlockBorderWrapper"],[data-testid="stPopoverBody"]{
 
 /* ── Feedback ───────────────────────────────────────────────── */
 [data-testid="stAlert"]{border-radius:var(--r);border:1px solid var(--line);
-  box-shadow:none;font-size:13.5px;}
+  box-shadow:none;font-size:15px;}
 [data-testid="stCaptionContainer"]{color:var(--muted);font-size:12.5px;}
 hr{margin:14px 0;border-color:var(--line);}
 #MainMenu,footer,[data-testid="stDecoration"]{visibility:hidden;}
@@ -203,8 +219,8 @@ hr{margin:14px 0;border-color:var(--line);}
 
 /* ── Step rail ──────────────────────────────────────────────── */
 .rail{display:flex;align-items:stretch;gap:2px;margin:2px 0 12px;}
-.rail .s{flex:1;text-align:center;border-radius:var(--r-sm);padding:8px 6px;
-  font-size:12.5px;font-weight:600;white-space:nowrap;border:1px solid var(--line);
+.rail .s{flex:1;text-align:center;border-radius:var(--r-sm);padding:11px 8px;
+  font-size:14.5px;font-weight:600;white-space:nowrap;border:1px solid var(--line);
   background:var(--sf);color:var(--faint);}
 .rail .s.on{background:var(--p);border-color:var(--p);color:#fff;}
 .rail .s.done{background:var(--p-sf);border-color:var(--p-bd);color:var(--p-dk);}

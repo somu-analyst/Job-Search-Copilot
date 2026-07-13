@@ -282,8 +282,49 @@ def opt_stacked(size=S):
     return img
 
 
+def opt_thirdeye(size=S):
+    """Shiva's third eye — the eye that SEES. The right mark for a search tool:
+    it looks for what you can't. Tripundra (three ash stripes) above, the
+    vertical eye below, pupil as the orange accent.
+
+    Built to survive 16px: one big shape, one accent dot, three fat stripes.
+    """
+    img = _shell(size)
+    d = ImageDraw.Draw(img)
+    B = float(size)
+    cx = B * 0.5
+
+    # ── Tripundra: three stripes. Kept thin and short on purpose — they're the
+    # context, not the subject. The EYE has to be the thing you see first.
+    sw = B * 0.042
+    for i, y in enumerate((B * 0.145, B * 0.225, B * 0.305)):
+        inset = B * 0.20 + i * B * 0.022     # each lower stripe a touch shorter
+        d.rounded_rectangle([inset, y - sw / 2, B - inset, y + sw / 2],
+                            radius=sw / 2, fill=CREAM)
+
+    # ── The eye: a vertical almond (pointed top and bottom), from two bezier
+    # edges so it reads as an EYE rather than a circle.
+    top, bot = B * 0.375, B * 0.935
+    half = B * 0.255                    # how far the lids bulge out
+    midy = (top + bot) / 2
+    right = _bez((cx, top), (cx + half * 1.62, midy), (cx, bot), n=44)
+    left = _bez((cx, bot), (cx - half * 1.62, midy), (cx, top), n=44)
+    d.polygon(right + left, fill=CREAM)
+
+    # iris + pupil — the accent lands exactly where the eye is looking
+    r_i = B * 0.128
+    d.ellipse([cx - r_i, midy - r_i, cx + r_i, midy + r_i], fill=ORANGE)
+    r_p = B * 0.056
+    d.ellipse([cx - r_p, midy - r_p, cx + r_p, midy + r_p], fill=(16, 38, 26))
+    # catchlight — what makes an eye read as alive rather than as a target
+    r_c = B * 0.028
+    d.ellipse([cx + r_i * 0.32 - r_c, midy - r_i * 0.46 - r_c,
+               cx + r_i * 0.32 + r_c, midy - r_i * 0.46 + r_c], fill=CREAM)
+    return img
+
+
 OPTIONS = {1: opt_archer, 2: opt_upright, 3: opt_crossed, 4: opt_mark,
-           5: opt_stacked}
+           5: opt_stacked, 6: opt_thirdeye}
 
 
 def write(choice: int = 1):
