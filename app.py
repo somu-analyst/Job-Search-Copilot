@@ -140,22 +140,44 @@ _STATES = {
 
 
 def short_loc(s: str) -> str:
-    """'New York, New York, United States' -> 'New York, NY'.
+    """'New York New York United States' -> 'New York, NY'.
 
     Sources spell locations out in full, which made Location the widest column in
     the table for information you already knew (they're all US). Trimming the
     country and abbreviating the state buys back the width the 📄 column needs —
     without dropping a column anyone reads.
+
+    Handles BOTH shapes, which is the whole point: some sources comma-separate
+    ("Dallas, Texas, United States") and some don't ("Dallas Texas United
+    States"). A comma-only split silently no-ops on the second kind — and the
+    second kind is what's actually in the DB, so the first version of this
+    function did nothing at all.
     """
-    parts = [p.strip() for p in str(s or "").split(",") if p.strip()]
-    parts = [p for p in parts
-             if p.lower() not in ("united states", "usa", "us", "u.s.", "u.s.a.")]
-    if not parts:
+    t = " ".join(str(s or "").replace(",", " ").split())
+    if not t:
         return ""
-    if len(parts) >= 2:
-        city, state = parts[0], parts[-1]
-        return f"{city}, {_STATES.get(state.lower(), state)}"
-    return parts[0]
+    low = t.lower()
+    for tail in ("united states of america", "united states", "u s a", "usa", "us"):
+        if low.endswith(" " + tail):
+            t = t[: -(len(tail) + 1)].strip()
+            low = t.lower()
+            break
+    if not t:
+        return ""
+    # Match the longest state name at the END (so "New York" wins over "York",
+    # and "Washington District Of Columbia" resolves to DC rather than WA).
+    words = t.split()
+    for n in (3, 2, 1):
+        # `continue`, not `break`: a 2-word "Jacksonville Florida" is shorter than
+        # the 3-word candidate, and breaking here skipped straight past the 1-word
+        # check that would have matched it.
+        if len(words) <= n:
+            continue
+        cand = " ".join(words[-n:]).lower()
+        if cand in _STATES:
+            city = " ".join(words[:-n])
+            return f"{city}, {_STATES[cand]}"
+    return t
 
 
 def job_columns(extra: dict | None = None) -> dict:
@@ -185,10 +207,10 @@ def job_columns(extra: dict | None = None) -> dict:
             "Skills",
             help="What the job is actually about, pulled from the title and JD. "
                  "Filter on these in the bar above."),
-        # No width hint — a fixed width ADDS to the total instead of sharing it,
-        # which pushed the grid 140px past its own edge. short_loc() is what buys
-        # the space back; the column just takes what's left.
-        "location": st.column_config.TextColumn("Location"),
+        # Pinned small. Auto-sizing let Location claim room it no longer needs:
+        # short_loc() got the values down to "New York, NY", so a small column
+        # holds them whole and hands the leftover width back to Title.
+        "location": st.column_config.TextColumn("Location", width="small"),
     }
     cfg.update(extra or {})
     return cfg
