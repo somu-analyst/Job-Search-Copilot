@@ -70,6 +70,72 @@ def email_patterns(first: str, last: str, domain: str) -> list[str]:
             f"{f}_{l}@{domain}", f"{f}@{domain}", f"{l}.{f}@{domain}"]
 
 
+def hunter_key() -> str:
+    """Hunter.io key from config/profile.yml (gitignored)."""
+    from pathlib import Path
+    try:
+        import yaml
+        cfg = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
+        return ((yaml.safe_load(cfg.read_text(encoding="utf-8")) or {})
+                .get("api_keys", {}) or {}).get("hunter_key", "") or ""
+    except Exception:
+        return ""
+
+
+def hunter_cached(conn, domain: str, *, allow_fetch: bool = False) -> dict:
+    """Hunter contacts for a domain, cached FOREVER after the first lookup.
+
+    The free plan is 50 searches a MONTH — a hard budget. Every repeat view of
+    the same job would otherwise burn one, and you'd be out by Tuesday. So we
+    only ever hit the API when the caller explicitly asks (a button press), and
+    we never look the same domain up twice.
+    Returns {'pattern','emails','cached':bool,'spent':bool}.
+    """
+    import json
+    if not domain:
+        return {"pattern": "", "emails": [], "cached": False, "spent": False}
+
+    row = conn.execute(
+        "SELECT pattern, emails FROM hunter_cache WHERE domain=?", (domain,)).fetchone()
+    if row:
+        try:
+            emails = json.loads(row[1] or "[]")
+        except Exception:
+            emails = []
+        return {"pattern": row[0] or "", "emails": emails,
+                "cached": True, "spent": False}
+
+    if not allow_fetch:
+        return {"pattern": "", "emails": [], "cached": False, "spent": False}
+
+    res = hunter_lookup(domain, hunter_key())
+    conn.execute(
+        "INSERT OR REPLACE INTO hunter_cache (domain, pattern, emails, fetched_at) "
+        "VALUES (?,?,?,?)",
+        (domain, res.get("pattern", ""), json.dumps(res.get("emails", [])),
+         __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M")))
+    conn.commit()
+    res.update({"cached": False, "spent": True})
+    return res
+
+
+def hunter_quota() -> dict:
+    """{'used': n, 'available': n} — so the app can show what's left."""
+    k = hunter_key()
+    if not k:
+        return {}
+    try:
+        import requests
+        r = requests.get("https://api.hunter.io/v2/account",
+                         params={"api_key": k}, timeout=15)
+        if r.status_code != 200:
+            return {}
+        s = ((r.json().get("data") or {}).get("requests") or {}).get("searches", {})
+        return {"used": s.get("used", 0), "available": s.get("available", 0)}
+    except Exception:
+        return {}
+
+
 def hunter_lookup(domain: str, api_key: str) -> dict:
     """Hunter.io — the LEGAL version of contact discovery (free tier ~25/mo,
     GDPR opt-out process, which scraped lists don't have). Returns

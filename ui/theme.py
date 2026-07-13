@@ -83,9 +83,13 @@ p,li,span,label{font-size:14px;}
 .hero-id{display:flex;align-items:center;gap:17px;}
 .hero-logo{width:70px;height:70px;border-radius:17px;flex:none;
   box-shadow:0 5px 16px -3px rgba(0,0,0,.38);}
-.hero h1{color:#fff;margin:0;font-size:42px;font-weight:800;letter-spacing:-.035em;
-  line-height:1.02;white-space:nowrap;}
-@media (max-width:820px){ .hero h1{font-size:31px;white-space:normal;} }
+.hero h1{margin:0;font-size:52px;font-weight:800;letter-spacing:-.04em;
+  line-height:1.0;white-space:nowrap;}
+.hero h1 .w1{color:#F2FBF5;}                      /* cool white, reads on green */
+.hero h1 .w2{color:#FFD166;                        /* warm gold — sings on green */
+  text-shadow:0 2px 14px rgba(255,209,102,.28);}
+@media (max-width:1000px){ .hero h1{font-size:40px;} }
+@media (max-width:820px){ .hero h1{font-size:32px;white-space:normal;} }
 .hero p{margin:12px 0 0;opacity:.88;font-size:14px;max-width:680px;
   position:relative;z-index:1;}
 .hero .kicker{font-size:10.5px;font-weight:700;letter-spacing:.16em;

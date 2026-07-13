@@ -108,6 +108,50 @@ def _gemini_key() -> str:
     return raw
 
 
+def _kimchi_key() -> str:
+    from pathlib import Path
+    try:
+        import yaml
+        cfg = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
+        return ((yaml.safe_load(cfg.read_text(encoding="utf-8")) or {})
+                .get("api_keys", {}) or {}).get("kimchi_key", "") or ""
+    except Exception:
+        return ""
+
+
+# Kimchi (Cast AI) — OpenAI-compatible, PAID per token. Ordered cheapest/fastest
+# first: we only get here when every free model is capped, so spend the credit
+# conservatively. Some models return empty content (reasoning-only), so the
+# caller must fall through on empty rather than treating it as success.
+KIMCHI_URL = "https://llm.kimchi.dev/openai/v1/chat/completions"
+KIMCHI_MODELS = ["deepseek-v4-flash", "minimax-m3", "kimi-k2.7"]
+
+
+def _kimchi_chat(prompt: str, max_tokens: int = 1400) -> str:
+    key = _kimchi_key()
+    if not key:
+        return ""
+    global _last_error
+    for model in KIMCHI_MODELS:
+        try:
+            r = requests.post(KIMCHI_URL, timeout=60,
+                              headers={"Authorization": f"Bearer {key}",
+                                       "Content-Type": "application/json"},
+                              json={"model": model, "max_tokens": max_tokens,
+                                    "messages": [{"role": "user",
+                                                  "content": prompt}]})
+            if r.status_code != 200:
+                _last_error = f"kimchi/{model}: HTTP {r.status_code}"
+                continue
+            txt = (r.json()["choices"][0]["message"].get("content") or "").strip()
+            if txt:
+                return txt
+            _last_error = f"kimchi/{model}: empty"
+        except Exception as e:
+            _last_error = f"kimchi/{model}: {type(e).__name__}"
+    return ""
+
+
 def gemini_status() -> str:
     """Human-readable state of the Gemini fallback lane ('' when it's fine)."""
     from pathlib import Path
@@ -187,12 +231,22 @@ def _chat(prompt: str, max_tokens=1400, passes=2) -> str:
                 continue
         if attempt < passes - 1:
             time.sleep(1.5)
-    # OpenRouter exhausted/absent → try Gemini's separate free quota
+    # ── Fallback ladder, cheapest first. We only descend when the tier above is
+    # genuinely exhausted, so the paid lane is a safety net, not the default.
+    #   1. OpenRouter :free   (above)     — free
+    #   2. Gemini free tier                — free
+    #   3. Kimchi (Cast AI)                — PAID, prepaid credit
     g = _gemini_chat(prompt, max_tokens)
     if g:
         return g
-    if not key and not _gemini_key():
-        _last_error = "No AI key found (OpenRouter in career-ops/.env or gemini_key in profile.yml)"
+
+    k = _kimchi_chat(prompt, max_tokens)
+    if k:
+        return k
+
+    if not key and not _gemini_key() and not _kimchi_key():
+        _last_error = ("No AI key found (OpenRouter in career-ops/.env, or "
+                       "gemini_key / kimchi_key in config/profile.yml)")
     return ""
 
 
