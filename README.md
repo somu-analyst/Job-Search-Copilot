@@ -47,8 +47,8 @@ never get committed.
 
 ## What makes it different
 
-**Direct apply links.** Aggregators bounce you through reposters (Lensa, Talentify) that
-often can't even take an application. `src/direct_apply.py` resolves a real employer link
+**Direct apply links.** Aggregators bounce you through third-party reposters that often
+can't even take an application. `src/direct_apply.py` resolves a real employer link
 for **every** job, in four tiers: already-an-ATS → query the employer's own portal API
 (Workday / Greenhouse / Lever / SmartRecruiters / Radancy) → deep-link into their careers
 search → their careers page. It discovers each employer's ATS once and remembers it, so
@@ -105,21 +105,6 @@ resume they're holding.
   Hunter.io (which has a real GDPR opt-out, unlike a scraped list).
 - **It only reads public job data** — the same endpoints careers pages already call.
 
-## Ideas adapted from existing projects
-
-Deliberately borrows the good parts of the open-source job-hunt ecosystem and leaves out
-the risky parts. Not a fork of any of them.
-
-| Repo | What it does well | Adapted? |
-|------|-------------------|----------|
-| [speedyapply/JobSpy](https://github.com/speedyapply/JobSpy) | Battle-tested multi-board scraper, proxy rotation | ✅ Our board-scraping engine |
-| [PaulMcInnis/JobFunnel](https://github.com/PaulMcInnis/JobFunnel) | Local-first pipeline, dedup, stale-job hygiene | ✅ Local DB + dedupe-on-insert + auto-archive |
-| [DaKheera47/job-ops](https://github.com/DaKheera47/job-ops) | End-to-end pipeline with a UI | ✅ Inspired the run→store→dashboard split |
-| [emredurukn/awesome-job-boards](https://github.com/emredurukn/awesome-job-boards) | Curated board list | ✅ Sourced extra boards for the roadmap |
-| [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search) | AI relevance scoring | ✅ Extended — free-model scoring *and* a deterministic fallback |
-| [AndrewStetsenko/tech-jobs-with-relocation](https://github.com/AndrewStetsenko/tech-jobs-with-relocation) | Visa-friendly listings | ⚠️ Repurposed as the H-1B sponsor-priority flag |
-| [GodsScion/Auto_job_applier_linkedIn](https://github.com/GodsScion/Auto_job_applier_linkedIn) | Auto-fills & submits LinkedIn Easy Apply | ❌ **Not adapted** — auto-submitting risks a permanent ban. We assist; you submit. |
-
 ## Roadmap
 
 1. **More employer portals** — every ATS added to `direct_apply.py` upgrades a whole
@@ -128,3 +113,10 @@ the risky parts. Not a fork of any of them.
 3. **Interview tracker** — stages and notes on top of the `applied` pipeline.
 4. **Swap the frontend** — the SQLite DB is the API; `ui/` is isolated, so React/Next is
    a drop-in replacement.
+
+---
+
+<sub>**Credits.** Board scraping runs on [python-jobspy](https://github.com/speedyapply/JobSpy)
+(MIT). The local-first pipeline shape — own the DB, dedupe on insert, age out stale rows —
+follows the pattern set by [JobFunnel](https://github.com/PaulMcInnis/JobFunnel). Everything
+else here is original; this is not a fork of any project.</sub>

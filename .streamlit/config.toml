@@ -1,6 +1,6 @@
 [theme]
-# Brand: Glassdoor green. The Swiggy-orange Apply accent is applied in CSS —
-# Streamlit's theme block only supports a single primary colour.
+# Brand green. The orange Apply accent is applied in CSS — Streamlit's theme
+# block only supports a single primary colour.
 primaryColor = "#0CAA41"
 backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F7FAF8"

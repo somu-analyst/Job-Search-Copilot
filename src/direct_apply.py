@@ -162,8 +162,52 @@ def _smartrecruiters(ref: str, title: str) -> list[tuple[str, str]]:
         return []
 
 
+_BOFA_FEED: list[tuple[str, str]] | None = None
+
+
+def _bofa(ref: str, title: str) -> list[tuple[str, str]]:
+    """Bank of America (AEM careers servlet).
+
+    BoA's `search` parameter is a MODE, not a query — the only value it accepts
+    is `getAllJobs`. Passing a job title there (which is what a naive
+    `?search={title}` fallback does) is an invalid mode, so the site silently
+    ignores it and renders the unfiltered job list. That is exactly the useless
+    "all jobs" page you land on from an aggregator link.
+
+    So there is nothing to query: we pull the entire live feed once (~1.8k rows,
+    one request) and match against it in memory. `jcrURL` on each row is the real
+    job-detail path, which is what we actually want.
+    """
+    global _BOFA_FEED
+    if _BOFA_FEED is None:
+        _BOFA_FEED = []
+        try:
+            r = requests.get(
+                "https://careers.bankofamerica.com/services/jobssearchservlet",
+                params={"start": 0, "rows": 2500, "search": "getAllJobs"},
+                headers={**HDR, "Accept": "application/json",
+                         "Referer": "https://careers.bankofamerica.com/en-us/job-search"},
+                timeout=TIMEOUT * 3)
+            if r.status_code == 200:
+                for j in r.json().get("jobsList", []):
+                    path = j.get("jcrURL") or ""
+                    nm = j.get("postingTitle") or ""
+                    if path and nm:
+                        _BOFA_FEED.append(
+                            (nm, f"https://careers.bankofamerica.com{path}"))
+        except Exception:
+            pass
+    return _BOFA_FEED
+
+
 ADAPTERS = {"workday": _workday, "radancy": _radancy, "greenhouse": _greenhouse,
-            "lever": _lever, "smartrecruiters": _smartrecruiters}
+            "lever": _lever, "smartrecruiters": _smartrecruiters, "bofa": _bofa}
+
+# Adapters that return the employer's ENTIRE live job list rather than the
+# results of a keyword query. For these — and only these — "the title isn't in
+# there" proves the posting is closed, so we can retire the job instead of
+# handing you a link that goes nowhere.
+FULL_FEED_ADAPTERS = {"bofa"}
 
 # Employers whose portal we already know (grows via discovery below).
 KNOWN_PORTALS: dict[str, tuple[str, str]] = {
@@ -172,6 +216,7 @@ KNOWN_PORTALS: dict[str, tuple[str, str]] = {
     "citizens financial group": ("radancy", "https://jobs.citizensbank.com"),
     "cvs health": ("workday",
                    "cvshealth.wd1.myworkdayjobs.com|cvshealth|CVS_Health_Careers"),
+    "bofa": ("bofa", "careers.bankofamerica.com"),
 }
 
 
@@ -263,10 +308,15 @@ def discover_portal(company: str) -> tuple[str, str]:
 # Tier 3 — employers whose APIs are bot-blocked (403) but whose careers site
 # accepts a keyword search. Deep-link straight into THEIR search, pre-filled
 # with the job title: you land on the employer, never on a reposter.
+#
+# NOTE there is deliberately no Bank of America entry. Its careers page reads
+# `search` as a MODE (`getAllJobs`), not a query, so `?search={title}` renders
+# the unfiltered list — a link that looks like it worked and didn't. BoA is
+# handled by the `_bofa` adapter above instead; if that finds no match, the
+# posting is gone and we say so rather than fake a link.
 SEARCH_FALLBACKS = {
     "wells fargo": "https://www.wellsfargojobs.com/en/jobs/?search={q}",
     "jpmorgan": "https://careers.jpmorgan.com/us/en/search-results?keywords={q}",
-    "bofa": "https://careers.bankofamerica.com/en-us/job-search?search={q}",
     "citizens": "https://jobs.citizensbank.com/search-jobs/{q}/",
     "american express": "https://aexp.eightfold.ai/careers?query={q}",
     "capital one": "https://www.capitalonecareers.com/search-jobs/{q}/",
@@ -322,7 +372,7 @@ def resolve_all(conn, limit: int = 2000, verbose: bool = True) -> dict:
     ).fetchall()
 
     stats = {"direct": 0, "portal": 0, "search": 0, "careers": 0,
-             "websearch": 0, "unresolved": 0}
+             "websearch": 0, "gone": 0, "unresolved": 0}
     portals: dict[str, tuple[str, str]] = {}
     looked_up = 0
 
@@ -348,13 +398,26 @@ def resolve_all(conn, limit: int = 2000, verbose: bool = True) -> dict:
                     print(f"  portal: {company} -> {kind}")
 
         kind, ref = portals[key]
-        found = ""
+        found, cands = "", []
         if kind:
             looked_up += 1
-            found = _match(title, ADAPTERS[kind](ref, title))
+            cands = ADAPTERS[kind](ref, title)
+            found = _match(title, cands)
         if found:                                    # Tier 2
             conn.execute("UPDATE jobs SET apply_url=? WHERE url=?", (found, url))
             stats["portal"] += 1
+            continue
+
+        # The posting is GONE. Only trustworthy for a full-feed adapter: it hands
+        # back every live job at that employer, so absence really is absence. A
+        # keyword-search adapter returning nothing might just be a bad query, and
+        # wrongly burying a live job is worse than showing a weak link.
+        # `cands` must be non-empty or we'd mark the world stale on a network blip.
+        if kind in FULL_FEED_ADAPTERS and cands:
+            conn.execute(
+                "UPDATE jobs SET status='stale', notes=? WHERE url=? AND status='new'",
+                (f"Not in {company}'s live careers feed — posting closed.", url))
+            stats["gone"] += 1
             continue
 
         sf = search_fallback(company, title)         # Tier 3

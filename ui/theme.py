@@ -3,8 +3,8 @@
 Kept apart from src/ (business logic) so the frontend stays swappable: nothing
 here imports from src, and src never imports from ui.
 
-Visual system — Glassdoor green shell, Swiggy orange Apply
-----------------------------------------------------------
+Visual system — green shell, orange Apply
+----------------------------------------
 Brand      green   #0CAA41   (structure: nav, tabs, links, selected states)
 Accent     orange  #FC8019   (RESERVED for Apply — one loud thing per screen)
 Signal     amber   #F59E0B   (must-apply 🔥 chip only)
@@ -13,7 +13,7 @@ Radius     8 / 12 / 16px     Spacing: 4px base unit
 Elevation  near-flat: hairline border + 1px shadow. Depth only on hover.
 
 Three roles, three hues, no collisions:
-  - Green is the native job-site hue (Glassdoor, Upwork) — reads "go / trusted".
+  - Green reads "go / trusted" and is the conventional hue for hiring products.
   - Orange is its complement, so Apply separates hard from the shell. That was
     the original bug: the CTA was the same blue family as the nav and vanished
     into it.
@@ -41,9 +41,9 @@ TOKENS = {
 CSS = """
 <style>
 :root{
-  /* brand: Glassdoor green — structure only */
+  /* brand: green — structure only */
   --p:#0CAA41; --p-dk:#087F33; --p-sf:#EFFBF3; --p-bd:#B7ECCB;
-  /* accent: Swiggy orange — Apply button ONLY */
+  /* accent: orange — Apply button ONLY */
   --a:#FC8019; --a-dk:#C2410C; --a-sf:#FFF4ED; --a-bd:#FED7AA;
   /* signal: amber — 🔥 must-apply chip only */
   --w:#F59E0B; --w-dk:#B45309; --w-sf:#FFFBEB; --w-bd:#FDE68A;
@@ -79,8 +79,8 @@ p,li,label,div[data-testid="stMarkdownContainer"] p{font-size:15.5px;}
   font-size:13.5px!important;}
 
 /* ── Hero: gradient, restrained, states what the app does ───── */
-/* Glassdoor's dark slate-green: the pure green arrives late, as an accent —
-   a flat field of bright green next to the orange CTA drifts "eco/agri". */
+/* Dark slate-green ground: the pure green arrives late, as an accent — a flat
+   field of bright green next to the orange CTA drifts "eco/agri". */
 .hero{background:linear-gradient(115deg,#0E1A1F 0%,#124734 55%,#0CAA41 130%);
   border-radius:var(--r-lg);padding:26px 30px;margin-bottom:14px;color:#fff;
   box-shadow:var(--sh-md);position:relative;overflow:hidden;}
