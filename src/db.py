@@ -30,8 +30,18 @@ def today() -> str:
 
 def connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    # A scan/resolve runs for minutes while the Streamlit app has the same file
+    # open. On the default journal that's a hard "database is locked" the moment
+    # they overlap — the resolver died mid-run twice on exactly this. WAL lets a
+    # reader (the app) and a writer (the resolver) coexist, and the timeout makes
+    # a brief collision wait its turn instead of raising.
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
+    except sqlite3.Error:
+        pass
     return conn
 
 

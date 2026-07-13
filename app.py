@@ -120,6 +120,44 @@ JOB_COLS = ["🔥", "score", "apply_url", "tailor", "status",
             "title", "company", "tags", "location"]
 
 
+_STATES = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
+    "california": "CA", "colorado": "CO", "connecticut": "CT", "delaware": "DE",
+    "florida": "FL", "georgia": "GA", "hawaii": "HI", "idaho": "ID",
+    "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
+    "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN",
+    "mississippi": "MS", "missouri": "MO", "montana": "MT", "nebraska": "NE",
+    "nevada": "NV", "new hampshire": "NH", "new jersey": "NJ",
+    "new mexico": "NM", "new york": "NY", "north carolina": "NC",
+    "north dakota": "ND", "ohio": "OH", "oklahoma": "OK", "oregon": "OR",
+    "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
+    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+    "vermont": "VT", "virginia": "VA", "washington": "WA",
+    "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY",
+    "district of columbia": "DC",
+}
+
+
+def short_loc(s: str) -> str:
+    """'New York, New York, United States' -> 'New York, NY'.
+
+    Sources spell locations out in full, which made Location the widest column in
+    the table for information you already knew (they're all US). Trimming the
+    country and abbreviating the state buys back the width the 📄 column needs —
+    without dropping a column anyone reads.
+    """
+    parts = [p.strip() for p in str(s or "").split(",") if p.strip()]
+    parts = [p for p in parts
+             if p.lower() not in ("united states", "usa", "us", "u.s.", "u.s.a.")]
+    if not parts:
+        return ""
+    if len(parts) >= 2:
+        city, state = parts[0], parts[-1]
+        return f"{city}, {_STATES.get(state.lower(), state)}"
+    return parts[0]
+
+
 def job_columns(extra: dict | None = None) -> dict:
     """The shared column_config. `extra` adds tab-specific columns."""
     cfg = {
@@ -147,6 +185,9 @@ def job_columns(extra: dict | None = None) -> dict:
             "Skills",
             help="What the job is actually about, pulled from the title and JD. "
                  "Filter on these in the bar above."),
+        # No width hint — a fixed width ADDS to the total instead of sharing it,
+        # which pushed the grid 140px past its own edge. short_loc() is what buys
+        # the space back; the column just takes what's left.
         "location": st.column_config.TextColumn("Location"),
     }
     cfg.update(extra or {})
@@ -350,6 +391,7 @@ def job_board(kp: str, default_status=None, height=460):
     view = df.copy()
     view["🔥"] = (df["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
     view["tailor"] = False
+    view["location"] = df["location"].map(short_loc)
     view = view[JOB_COLS]
     edited = st.data_editor(
         view, hide_index=True, use_container_width=True, height=height,
@@ -528,6 +570,7 @@ with t_applied:
         va = dfa.copy()
         va["🔥"] = (dfa["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
         va["tailor"] = False
+        va["location"] = dfa["location"].map(short_loc)
         acols = JOB_COLS + ["date_applied"]
         edited = st.data_editor(
             va[acols], hide_index=True, use_container_width=True, height=500,
@@ -611,6 +654,7 @@ with t_resume:
         grid = jp.copy()
         grid["🔥"] = (jp["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
         grid["tailor"] = False
+        grid["location"] = jp["location"].map(short_loc)
         # Same column order as every other table. `tailor` is dropped: you are
         # already IN Resume Studio, so a button that sends you here is noise.
         pcols = [c for c in JOB_COLS if c != "tailor"]
