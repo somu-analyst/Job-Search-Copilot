@@ -42,10 +42,19 @@ def hero(title: str, subtitle: str, kicker: str = "", logo_b64: str = "") -> Non
         if i < len(FLOW) - 1:
             steps.append("<div class='fl-arw'>&rarr;</div>")
 
+    # Two-tone wordmark: the last word takes a warm gold that sings against the
+    # green shell. Deliberately NOT the orange accent — orange means Apply, and
+    # spending it on decoration would blunt the one button that matters.
+    words = _esc(title).split()
+    head = " ".join(words[:-1])
+    tail = words[-1] if words else ""
+    mark_html = (f"<h1><span class='w1'>{head}</span> "
+                 f"<span class='w2'>{tail}</span></h1>")
+
     st.markdown(
         f"""<div class='hero'>
   <div class='hero-grid'>
-    <div class='hero-id'>{mark}<div>{k}<h1>{_esc(title)}</h1></div></div>
+    <div class='hero-id'>{mark}<div>{k}{mark_html}</div></div>
     <div class='hero-flow'>{''.join(steps)}</div>
   </div>
   <p>{_esc(subtitle)}</p>

@@ -46,6 +46,14 @@ def _logo_b64() -> str:
     p = ASSETS / "logo-180.png"
     return base64.b64encode(p.read_bytes()).decode() if p.exists() else ""
 
+
+@st.cache_data(ttl=300)
+def _hunter_quota() -> dict:
+    """Hunter's remaining searches. Doesn't consume quota, but it IS a network
+    round-trip — cached so it isn't re-fetched on every rerun."""
+    from src import outreach as og
+    return og.hunter_quota()
+
 APPLIED_STATES = ("applied", "responded", "interview", "offer")
 AGE_OPTS = {"Any time": None, "Today": 0, "1 day": 1, "3 days": 3,
             "1 week": 7, "2 weeks": 14, "1 month": 30}
@@ -316,6 +324,23 @@ with st.sidebar:
             s.update(label=f"Done — +{nb+nw+na} new jobs", state="complete")
         st.rerun()
     st.divider()
+
+    # ── Hunter.io budget: 50 searches/month, so make the number impossible to miss
+    from src import outreach as _og
+    if _og.hunter_key():
+        _q = _hunter_quota()
+        if _q:
+            used, avail = _q.get("used", 0), _q.get("available", 50)
+            left = max(0, avail - used)
+            _cached = conn.execute("SELECT COUNT(*) FROM hunter_cache").fetchone()[0]
+            st.subheader("🎯 Recruiter lookups")
+            st.progress(min(1.0, used / avail) if avail else 0.0)
+            st.caption(f"**{left} of {avail}** left this month · "
+                       f"{_cached} employer{'s' if _cached != 1 else ''} already "
+                       f"cached (free forever)")
+            if left <= 5:
+                st.warning("Nearly out — spend the rest on jobs you'll actually apply to.")
+
     st.caption(f"DB `{db.DB_PATH.name}` · {c['companies']} companies tracked")
 
 # ── Navigation ──────────────────────────────────────────────────────────────
@@ -741,9 +766,62 @@ with t_resume:
             if found["names"]:
                 st.info(f"👤 Named in the JD: {', '.join(found['names'])}")
             if not found["emails"] and not found["names"]:
-                st.caption("No contact published in this JD — use the LinkedIn "
-                           "searches below to find the recruiter, then connect "
-                           "with a short note.")
+                st.caption("No contact published in this JD — look them up below, "
+                           "or use the LinkedIn searches.")
+
+            # ── Hunter.io: real HR contacts. 50 searches/MONTH, so a lookup only
+            # happens on an explicit press and is then cached forever per domain.
+            hunted = og.hunter_cached(conn, domain)
+            if og.hunter_key():
+                if hunted["cached"] and hunted["emails"]:
+                    st.success(f"🎯 **{len(hunted['emails'])} HR contacts** at "
+                               f"{domain} *(cached — no search spent)*")
+                elif hunted["cached"]:
+                    st.caption(f"Hunter had no contacts for {domain} "
+                               "*(already checked — not spending another search)*")
+                elif found["emails"]:
+                    # The JD already names someone. Spending one of 50 searches to
+                    # find a contact you were handed for free is the easiest way
+                    # to burn the budget.
+                    st.caption("✅ The posting already gives you a contact — "
+                               "no need to spend a lookup.")
+                else:
+                    q = og.hunter_quota()
+                    left = (q["available"] - q["used"]) if q else None
+                    lbl = (f"{left} of {q['available']} left this month"
+                           if q else "free plan")
+                    if left == 0:
+                        st.warning("Hunter.io searches exhausted for this month.")
+                    elif st.button(f"🔎 Find recruiters at {job['company'][:20]}",
+                                   use_container_width=True,
+                                   help=f"Spends ONE Hunter.io search ({lbl}). "
+                                        f"Cached forever after, so this employer is "
+                                        f"never looked up twice — and one search "
+                                        f"covers every job they post."):
+                        with st.spinner(f"Looking up {domain}…"):
+                            hunted = og.hunter_cached(conn, domain, allow_fetch=True)
+                        st.rerun()
+                    if left is not None:
+                        st.caption(f"Hunter.io: **{lbl}**")
+
+            if hunted["emails"]:
+                if hunted["pattern"]:
+                    st.caption(f"Email pattern at {domain}: `{hunted['pattern']}`")
+                for e in hunted["emails"][:8]:
+                    nm = f"{e.get('first_name','')} {e.get('last_name','')}".strip()
+                    pos = e.get("position") or ""
+                    with st.container(border=True):
+                        st.markdown(f"**{nm or e['value']}** — {pos or 'HR'}")
+                        st.code(e["value"], language=None)
+                        subj_h, body_h = og.draft_email(
+                            name=nm,
+                            title="Senior Fraud & Credit Risk Data Analytics professional",
+                            company=job["company"], job_title=job["title"],
+                            highlights=fit.get("highlights", [])[:2],
+                            job_url=job["url"])
+                        st.link_button("📨 Draft an email to them",
+                                       og.mailto(e["value"], subj_h, body_h),
+                                       use_container_width=True)
 
             st.markdown("**Find them on LinkedIn** (you connect manually)")
             for role in ("recruiter", "talent acquisition", "hiring manager"):

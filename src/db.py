@@ -76,6 +76,12 @@ def init(conn: sqlite3.Connection) -> None:
             applied_at   TEXT DEFAULT '',
             notes        TEXT DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS hunter_cache (
+            domain     TEXT PRIMARY KEY,   -- one row per employer domain
+            pattern    TEXT DEFAULT '',    -- e.g. '{first}.{last}'
+            emails     TEXT DEFAULT '[]',  -- JSON list of contacts
+            fetched_at TEXT
+        );
         CREATE INDEX IF NOT EXISTS idx_jobs_status  ON jobs(status);
         CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
         CREATE INDEX IF NOT EXISTS idx_res_job      ON resumes(job_url);
