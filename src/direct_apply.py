@@ -364,6 +364,26 @@ KNOWN_PORTALS: dict[str, tuple[str, str]] = {
     "cvs health": ("workday",
                    "cvshealth.wd1.myworkdayjobs.com|cvshealth|CVS_Health_Careers"),
     "bofa": ("bofa", "careers.bankofamerica.com"),
+    # Verified by reading their careers pages (see ats_from_careers_page).
+    "capital one": ("workday",
+                    "capitalone.wd12.myworkdayjobs.com|capitalone|Capital_One"),
+    "us bank": ("workday",
+                "usbank.wd1.myworkdayjobs.com|usbank|US_Bank_Careers"),
+    "td": ("workday", "td.wd3.myworkdayjobs.com|td|TD_Bank_Careers"),
+}
+
+# Where to look when a company has no careers_url on file yet. Only needed for
+# employers big enough to be worth the entry; everything else still goes through
+# slug probing and, failing that, a search link.
+CAREERS_PAGES = {
+    "synchrony": "https://www.synchronycareers.com/search-jobs/",
+    "usaa": "https://www.usaa.com/careers",
+    "deloitte": "https://apply.deloitte.com/careers/",
+    "capgemini": "https://www.capgemini.com/careers/join-capgemini/",
+    "onemain financial": "https://www.onemainfinancial.com/careers",
+    "fifth third bank": "https://www.53.com/content/fifth-third/en/careers.html",
+    "scotiabank": "https://www.scotiabank.com/careers/en/careers.html",
+    "rbc": "https://jobs.rbc.com/ca/en",
 }
 
 
@@ -405,9 +425,61 @@ ALIASES = {
 }
 
 
+# Matched against the RAW lowercased name, BEFORE _canon() runs. Needed where a
+# noise word carries meaning: _NOISE strips "us", so "US Bank" canonicalises to
+# the bare word "bank" — no portal, and a key generic enough to be dangerous.
+# The fix has to happen before the information is destroyed.
+RAW_ALIASES = {
+    "us bank": "us bank", "u s bank": "us bank", "usbank": "us bank",
+    "us bancorp": "us bank", "u s bancorp": "us bank",
+}
+
+
 def _key(name: str) -> str:
+    raw = " ".join(re.sub(r"[^a-z0-9 ]", " ", (name or "").lower()).split())
+    if raw in RAW_ALIASES:
+        return RAW_ALIASES[raw]
     c = _canon(name)
     return ALIASES.get(c, c)
+
+
+# An employer's careers page almost always LINKS to whatever ATS it runs on —
+# the "search jobs" button points straight at it. Reading that page is far more
+# reliable than guessing tenant slugs: guessing found 1 of 7 big employers,
+# while reading their careers page found Capital One and U.S. Bank on the first
+# try. Each pattern captures the pieces the matching adapter needs as its `ref`.
+_ATS_SIGNATURES = [
+    ("workday", re.compile(
+        r"([a-z0-9-]+\.wd\d+\.myworkdayjobs\.com)/(?:[a-z]{2}-[A-Z]{2}/)?"
+        r"([A-Za-z0-9_-]+)", re.I)),
+    ("greenhouse", re.compile(r"boards\.greenhouse\.io/([a-z0-9]+)", re.I)),
+    ("lever", re.compile(r"jobs\.lever\.co/([a-z0-9-]+)", re.I)),
+    ("smartrecruiters", re.compile(
+        r"careers\.smartrecruiters\.com/([A-Za-z0-9]+)", re.I)),
+]
+
+
+def ats_from_careers_page(url: str) -> tuple[str, str]:
+    """Read an employer's careers page and identify the ATS it links out to."""
+    if not url:
+        return "", ""
+    try:
+        r = requests.get(url, headers=HDR, timeout=TIMEOUT, allow_redirects=True)
+        if r.status_code != 200:
+            return "", ""
+        body = r.text
+    except Exception:
+        return "", ""
+    for kind, rx in _ATS_SIGNATURES:
+        m = rx.search(body)
+        if not m:
+            continue
+        if kind == "workday":
+            host = m.group(1).lower()
+            tenant = host.split(".")[0]
+            return "workday", f"{host}|{tenant}|{m.group(2)}"
+        return kind, m.group(1)
+    return "", ""
 
 
 def _probe_ok(kind: str, body) -> bool:
@@ -424,17 +496,22 @@ def _probe_ok(kind: str, body) -> bool:
     return False
 
 
-def discover_portal(company: str) -> tuple[str, str]:
+def discover_portal(company: str, careers_url: str = "") -> tuple[str, str]:
     """Find a company's ATS. Returns (kind, ref) or ('','').
     EXACT canonical match only — a substring match would send 'Citi' jobs to
     'Citizens' (they share a prefix), which is worse than no link at all."""
     k = _key(company)
     if not k:
         return "", ""
-    for table in (KNOWN_PORTALS, _workday_portals()):
-        canon = {_key(label): val for label, val in table.items()}
-        if k in canon:
-            return canon[k]
+    # KNOWN_PORTALS is keyed by the FINAL key, so look it up directly. Running its
+    # labels back through _key() re-canonicalised them and _NOISE strips "us", so
+    # the label "us bank" became "bank" while "U.S. Bank" resolved to "us bank" —
+    # they could never meet, and U.S. Bank silently had no portal.
+    if k in KNOWN_PORTALS:
+        return KNOWN_PORTALS[k]
+    wd = {_key(label): val for label, val in _workday_portals().items()}
+    if k in wd:
+        return wd[k]
     # probe the public ATS APIs by slug — must return real postings to count
     dashed = slugify(k)
     slug = dashed.replace("-", "")
@@ -449,6 +526,16 @@ def discover_portal(company: str) -> tuple[str, str]:
                 return kind, ref
         except Exception:
             continue
+
+    # Last resort before giving up: read the employer's own careers page and see
+    # which ATS it links out to. Slug-guessing only works when the company name
+    # happens to BE the slug; this works whenever they have a careers page, which
+    # is a far bigger set.
+    page = CAREERS_PAGES.get(k) or (careers_url or "")
+    if page:
+        kind, ref = ats_from_careers_page(page)
+        if kind:
+            return kind, ref
     return "", ""
 
 
@@ -535,7 +622,9 @@ def resolve_all(conn, limit: int = 2000, verbose: bool = True) -> dict:
 
         key = _key(company)
         if key not in portals:
-            portals[key] = discover_portal(company)
+            cu = conn.execute("SELECT careers_url FROM companies WHERE name=?",
+                              (company,)).fetchone()
+            portals[key] = discover_portal(company, (cu[0] if cu else "") or "")
             if portals[key][0]:
                 kind, ref = portals[key]
                 conn.execute(
