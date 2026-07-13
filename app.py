@@ -106,6 +106,72 @@ def _post_process():
     db.archive_stale(conn)
 
 
+# ── ONE column spec, used by every job table in the app ─────────────────────
+# Today, Jobs, Applied and the Resume Studio picker all show the same object, so
+# they must show it the same way. When each table invented its own order you had
+# to re-learn the layout on every tab, and "where's Apply?" became a per-tab
+# question. Defined once here; tabs may APPEND a column (Applied adds its date)
+# but never reorder the shared ones.
+#
+# Order = what you decide with, left to right:
+#   is it hot -> how well does it fit -> apply -> tailor a resume -> where it
+#   stands -> what it is -> who -> what skills -> where
+JOB_COLS = ["🔥", "score", "apply_url", "tailor", "status",
+            "title", "company", "tags", "location"]
+
+
+def job_columns(extra: dict | None = None) -> dict:
+    """The shared column_config. `extra` adds tab-specific columns."""
+    cfg = {
+        "🔥": st.column_config.TextColumn("🔥", width="small"),
+        "score": st.column_config.NumberColumn(
+            "Fit", format="%.1f", width="small",
+            help="1-10 match vs your keywords, seniority, H-1B sponsor history"),
+        "apply_url": st.column_config.LinkColumn(
+            "Apply", display_text="apply ↗", width="small",
+            help="Direct link to the employer's own application page — "
+                 "skips third-party reposters."),
+        "tailor": st.column_config.CheckboxColumn(
+            "📄", width="small",
+            help="Tick to send this job to Resume Studio, then open that tab — "
+                 "it'll already be selected."),
+        "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES,
+                                                   width="small"),
+        # No width hints on the text columns. A fixed width is a PROMISE the
+        # container may not keep: the hints summed past the grid's own width and
+        # the last column fell off the right edge. Left unset, they share out
+        # whatever space remains after the small fixed ones.
+        "title": st.column_config.TextColumn("Title"),
+        "company": st.column_config.TextColumn("Company"),
+        "tags": st.column_config.TextColumn(
+            "Skills",
+            help="What the job is actually about, pulled from the title and JD. "
+                 "Filter on these in the bar above."),
+        "location": st.column_config.TextColumn("Location"),
+    }
+    cfg.update(extra or {})
+    return cfg
+
+
+def _handle_tailor(view, edited, df) -> None:
+    """A ticked 📄 box hands the job to Resume Studio.
+
+    Streamlit can't switch tabs for you, so the honest flow is: tick here, and
+    Resume Studio opens with that job already chosen. We store the URL (stable)
+    rather than a row index (which any filter change would invalidate).
+    """
+    if "tailor" not in edited.columns:
+        return
+    picked = [i for i, v in enumerate(edited["tailor"]) if v and not view["tailor"].iloc[i]]
+    if not picked:
+        return
+    row = df.iloc[picked[-1]]                      # last tick wins
+    st.session_state["rs_url"] = row["url"]
+    st.session_state["step_now"] = 2
+    st.success(f"**{row['title']}** queued → open the **📄 Resume Studio** tab.",
+               icon="📄")
+
+
 def _save_edits(df, edited, key_note="notes"):
     """Persist status/notes edits; stamp date_applied when a job turns applied."""
     n = 0
@@ -279,55 +345,20 @@ def job_board(kp: str, default_status=None, height=460):
         return
 
     st.caption(f"**{len(df)} jobs** · set **Status → applied** and it moves to "
-               f"Applied with today's date. 🔥 = fit ≥ {MUST_APPLY_AT:.0f}.")
-    # Eight columns, chosen to fit a laptop screen with NO horizontal scroll.
-    # Ordered by what you decide with, left to right:
-    #   is it hot -> how well does it fit -> the button -> what is it -> who ->
-    #   what skills -> where -> what have I done about it
-    # Everything cut from here is provenance, not decision material — source,
-    # posted/pulled dates, industry, notes. They still exist; they moved into the
-    # row dialog, one click away, where they cost you no screen width.
-    #
-    # Salary is cut too, reluctantly: only 0.4% of postings list one, so as a
-    # column it is blank on 99.6% of rows while charging full width. It survives
-    # as a chip in the row dialog, which is the right home for something you look
-    # up about ONE job rather than scan down a list.
-    # Status sits early, not last. The grid always keeps a ~14px gutter on its
-    # right edge, so whatever column ends up last gets shaved — and Status is the
-    # one column here you actually EDIT. Location is the one that can afford to
-    # lose a few pixels, so Location goes last.
-    COLS = ["🔥", "score", "apply_url", "status", "title", "company",
-            "tags", "location"]
+               f"Applied with today's date. Tick **📄** to tailor a resume for a job. "
+               f"🔥 = fit ≥ {MUST_APPLY_AT:.0f}.")
     view = df.copy()
     view["🔥"] = (df["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
-    view = view[COLS]
+    view["tailor"] = False
+    view = view[JOB_COLS]
     edited = st.data_editor(
         view, hide_index=True, use_container_width=True, height=height,
-        column_config={
-            "🔥": st.column_config.TextColumn("🔥", width="small"),
-            "score": st.column_config.NumberColumn("Fit", format="%.1f", width="small",
-                     help="1-10 match vs your keywords, seniority, H-1B sponsor history"),
-            "apply_url": st.column_config.LinkColumn(
-                "Apply", display_text="apply ↗", width="small",
-                help="Direct link to the employer's own application page — "
-                     "skips third-party reposters."),
-            # No width hints on the text columns. A fixed width is a PROMISE the
-            # container may not be able to keep: the hints summed past the grid's
-            # own width, so the last column (Status — the one you actually edit)
-            # fell off the right edge. Left unset, they share out whatever space
-            # is left after the small fixed ones.
-            "title": st.column_config.TextColumn("Title"),
-            "company": st.column_config.TextColumn("Company"),
-            "tags": st.column_config.TextColumn(
-                "Skills",
-                help="What the job is actually about, pulled from the title and JD. "
-                     "Filter on these in the bar above."),
-            "location": st.column_config.TextColumn("Location"),
-            "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES,
-                     width="small"),
-        },
-        disabled=[c for c in COLS if c != "status"],   # only Status is editable here
+        column_config=job_columns(),
+        # Only Status and the 📄 tick are yours to change here. Everything else is
+        # a fact about the posting, not an opinion about it.
+        disabled=[c for c in JOB_COLS if c not in ("status", "tailor")],
         key=f"{kp}_editor")
+    _handle_tailor(view, edited, df)
     if st.button("💾 Save changes", key=f"{kp}_save"):
         st.success(f"Saved {_save_edits(df, edited)} change(s).")
         st.rerun()
@@ -437,11 +468,18 @@ with t_today:
                     ui.job_card(r["title"], r["company"], r["location"], r["score"],
                                 industry=r["industry"], salary=r["salary"],
                                 sponsor=r["sponsor"], source=r["source"])
-                    b1, b2 = st.columns(2)
+                    b1, b2, b3 = st.columns(3)
                     with b1:
                         st.link_button("✅ Apply", r["apply_url"],
                                        use_container_width=True, type="primary")
                     with b2:
+                        if st.button("📄 Tailor", key=f"t{r['rowid']}",
+                                     use_container_width=True,
+                                     help="Send to Resume Studio"):
+                            st.session_state["rs_url"] = r["url"]
+                            st.session_state["step_now"] = 2
+                            st.success("Queued → open **📄 Resume Studio**.")
+                    with b3:
                         if st.button("View", key=f"v{r['rowid']}",
                                      use_container_width=True):
                             job_dialog(r.to_dict())
@@ -474,7 +512,9 @@ with t_applied:
     ui.section("✅ Applications in flight",
                "Update status as companies respond: responded → interview → offer.")
     dfa = load("""SELECT rowid, url, title, company, location, score, date_applied,
-                         date_posted, date_found, status, notes
+                         COALESCE(tags,'') tags,
+                         COALESCE(NULLIF(apply_url,''), url) apply_url,
+                         status, notes
                   FROM jobs
                   WHERE status IN ('applied','responded','interview','offer','rejected')
                   ORDER BY date_applied DESC, score DESC""")
@@ -482,19 +522,21 @@ with t_applied:
         ui.empty("📮", "No applications yet",
                  "Mark a job as `applied` from Today or Jobs and it lands here with a date.")
     else:
+        # Same shared columns, same positions as Today/Jobs — plus the one thing
+        # this tab exists to show, appended at the end rather than inserted into
+        # the middle: when you applied.
+        va = dfa.copy()
+        va["🔥"] = (dfa["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
+        va["tailor"] = False
+        acols = JOB_COLS + ["date_applied"]
         edited = st.data_editor(
-            dfa.drop(columns=["rowid"]), hide_index=True, use_container_width=True,
-            height=500,
-            column_config={
-                "url": st.column_config.LinkColumn("Link", display_text="open ↗"),
-                "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES),
-                "score": st.column_config.NumberColumn("Fit", format="%.1f"),
-                "date_applied": st.column_config.TextColumn("Applied on"),
-                "title": st.column_config.TextColumn("Title", width="large"),
-            },
-            disabled=["title", "company", "location", "url", "score",
-                      "date_applied", "date_posted", "date_found"],
+            va[acols], hide_index=True, use_container_width=True, height=500,
+            column_config=job_columns({
+                "date_applied": st.column_config.TextColumn("Applied on", width="small"),
+            }),
+            disabled=[c for c in acols if c not in ("status", "tailor")],
             key="applied_editor")
+        _handle_tailor(va[acols], edited, dfa)
         a1, a2 = st.columns([1, 4])
         with a1:
             if st.button("💾 Save", key="applied_save"):
@@ -533,6 +575,7 @@ with t_resume:
                        jobs.source, COALESCE(jobs.salary,'') salary,
                        COALESCE(jobs.description,'') description,
                        COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
+                       COALESCE(jobs.tags,'') tags,
                        COALESCE(companies.industry,'') industry, jobs.status
                 FROM jobs LEFT JOIN companies ON jobs.company = companies.name
                 WHERE jobs.status NOT IN ('skip','stale','rejected')"""
@@ -551,23 +594,32 @@ with t_resume:
             ui.empty("🔍", "No jobs match", "Loosen the filters or run a scan.")
             st.stop()
 
+        # A job ticked 📄 in Today/Jobs/Applied lands here already chosen. Streamlit
+        # can't preselect a dataframe row, so instead it becomes the DEFAULT when
+        # you haven't clicked one — same outcome, no lie about what's selected.
+        # Matched on url, not row index: any filter change invalidates an index.
+        rs_url = st.session_state.get("rs_url")
+        default_row = 0
+        if rs_url is not None and (jp["url"] == rs_url).any():
+            default_row = int(jp.index.get_indexer(jp.index[jp["url"] == rs_url])[0])
+        elif rs_url:
+            st.info("The job you ticked 📄 isn't in this list — clear the filters "
+                    "above to see it.")
+
         st.caption(f"**{len(jp)} jobs** — click a row to select it. "
                    "Headers stay put while you scroll.")
-        grid = jp[["score", "title", "company", "industry", "location", "salary",
-                   "status", "apply_url"]].copy()
-        grid.insert(0, "🔥", (jp["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""}))
+        grid = jp.copy()
+        grid["🔥"] = (jp["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
+        grid["tailor"] = False
+        # Same column order as every other table. `tailor` is dropped: you are
+        # already IN Resume Studio, so a button that sends you here is noise.
+        pcols = [c for c in JOB_COLS if c != "tailor"]
         ev = st.dataframe(
-            grid, hide_index=True, height=260, use_container_width=True,
+            grid[pcols], hide_index=True, height=260, use_container_width=True,
             on_select="rerun", selection_mode="single-row",
-            column_config={
-                "🔥": st.column_config.TextColumn("🔥", width="small"),
-                "score": st.column_config.NumberColumn("Fit", format="%.1f", width="small"),
-                "title": st.column_config.TextColumn("Title", width="large"),
-                "salary": st.column_config.TextColumn("Salary (FYI)"),
-                "apply_url": st.column_config.LinkColumn("Apply", display_text="apply ↗"),
-            }, key="pick_grid")
+            column_config=job_columns(), key="pick_grid")
         rows = ev.selection.rows if ev and ev.selection else []
-        job = jp.iloc[rows[0] if rows else 0]
+        job = jp.iloc[rows[0] if rows else default_row]
         st.session_state["picked_url"] = job["url"]
         st.session_state["step_now"] = 2
 
