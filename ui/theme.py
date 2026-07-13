@@ -70,7 +70,11 @@ h3{font-size:19.5px;font-weight:700;color:var(--ink);letter-spacing:-.012em;}
 h4{font-size:16.5px;font-weight:700;color:var(--ink);margin:6px 0 3px;}
 h5{font-size:13px;font-weight:700;color:var(--faint);
    text-transform:uppercase;letter-spacing:.07em;}
-p,li,span,label,div[data-testid="stMarkdownContainer"] p{font-size:15.5px;}
+/* NOTE: no bare `span` here. A global `span{font-size:…}` also hits the spans
+   INSIDE headings — it silently shrank the two-tone hero wordmark back to body
+   size while the h1 stayed at 82px, and the h1's negative letter-spacing then
+   crushed the letters into each other. Style the containers, not `span`. */
+p,li,label,div[data-testid="stMarkdownContainer"] p{font-size:15.5px;}
 [data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p{
   font-size:13.5px!important;}
 
@@ -99,6 +103,10 @@ p,li,span,label,div[data-testid="stMarkdownContainer"] p{font-size:15.5px;}
 .hero h1{margin:0!important;font-size:clamp(40px,5.4vw,82px)!important;
   font-weight:800!important;letter-spacing:-.042em!important;
   line-height:1.02!important;padding:0!important;}
+/* Belt and braces: the wordmark spans must take the h1's size, never a stray
+   inherited body size. */
+.hero h1 .w1,.hero h1 .w2{font-size:inherit!important;letter-spacing:inherit;
+  line-height:inherit;}
 .hero h1 .w1{color:#F2FBF5!important;}             /* cool white, reads on green */
 .hero h1 .w2{color:#FFD166!important;              /* warm gold — sings on green */
   text-shadow:0 3px 20px rgba(255,209,102,.32);}
