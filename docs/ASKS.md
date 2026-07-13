@@ -126,3 +126,15 @@ Every request Srinivas makes + every suggestion Claude proposes, with status.
 | G5 | …and get me the right link for *that* VP AML role | ⚠️ **The posting is closed.** Not in BoA's 1,797 live jobs; Jooble's own URL says `jobAge=92`. Web search finds only aggregator echoes. Nothing to link to. |
 
 **New capability that fell out of G4/G5:** for employers whose portal returns their *whole* live feed, absence now proves closure — those jobs are auto-retired to `stale` with a reason, instead of being handed a link that goes nowhere. 4 dead BoA jobs retired on the first run.
+
+| # | Ask | Status |
+|---|-----|--------|
+| H1 | Queue must not scroll horizontally | ✅ 14 cols → **8**. Page h-scroll measured at **0px** in the live browser. |
+| H2 | Important columns first; source/posted-date aren't important | ✅ New order: 🔥 · Fit · **Apply** · Status · Title · Company · **Skills** · Location. Source, posted/pulled dates, industry and notes moved into the row dialog. |
+| H3 | Apply in the first few columns | ✅ Column **3**. |
+| H4 | A column showing the job's keywords (SAS, Credit Risk, AML…) | ✅ New **Skills** column, from new `src/tags.py` (21 tags: domain → technique → tool). |
+| H5 | Filter by those keywords | ✅ **Skills** multiselect in the top bar (not buried in the popover) + "Match ALL" toggle in Filters. |
+
+**Judgement calls made (say if you disagree):**
+- **Salary cut from the grid** — only **6 of 1,395** postings (0.4%) list one, so it was a blank column charging full width. It survives as a chip in the row dialog.
+- **41% of jobs get no Skills tags** — 576 of them have *no description at all* and a generic title ("Data Analytics Senior Analyst"). Only **3** are genuine tagger misses. 1,257 of 1,395 jobs ship no description, so most tags come from the title alone.
