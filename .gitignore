@@ -1,5 +1,7 @@
 # Local data & DB (your job pipeline — keep private)
 data/*.db
+data/*.db-wal
+data/*.db-shm
 data/*.csv
 data/*.tsv
 
