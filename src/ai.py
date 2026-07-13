@@ -58,26 +58,67 @@ def _key() -> str:
     return ""
 
 
+def gemini_key_problem(k: str) -> str:
+    """'' if the key is usable, else a note explaining what's up with it.
+
+    Google issues TWO key formats now:
+      AIzaSy…  legacy, 39 chars — works everywhere
+      AQ.…     new format — legitimate, but widely reported to fail against
+               third-party integrations and to come back 429 RESOURCE_EXHAUSTED
+               ('check your plan and billing details') even on a free-tier
+               project that has used nothing.
+    We do NOT reject AQ. keys — plenty of them work, and rejecting by prefix
+    would lock out users whose key is fine. We just don't let the misleading
+    billing error stand unexplained: this is a key-format issue, not a billing
+    one, and no amount of billing fixes it.
+    """
+    if not k:
+        return ""
+    if k.startswith("AQ."):
+        return ("New-format ('AQ.') Gemini key. These often return 429 "
+                "RESOURCE_EXHAUSTED even on an unused free tier — a known "
+                "compatibility issue, NOT a billing problem. If Gemini keeps "
+                "failing, generate a legacy 'AIzaSy…' key from a different "
+                "Google Cloud project. OpenRouter is the primary lane anyway; "
+                "Gemini is only the fallback.")
+    return ""
+
+
 def _gemini_key() -> str:
     """Gemini API key from config/profile.yml (api_keys.gemini_key) or the
-    career-ops .env (GEMINI_API_KEY)."""
+    career-ops .env (GEMINI_API_KEY). Any format is accepted — we try the key
+    and let it speak for itself."""
     from pathlib import Path
     import yaml as _yaml
+    raw = ""
     cfg = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
     if cfg.exists():
         try:
-            k = ((_yaml.safe_load(cfg.read_text(encoding="utf-8")) or {})
-                 .get("api_keys", {}) or {}).get("gemini_key", "")
-            if k:
-                return k
+            raw = ((_yaml.safe_load(cfg.read_text(encoding="utf-8")) or {})
+                   .get("api_keys", {}) or {}).get("gemini_key", "") or ""
         except Exception:
-            pass
-    env = careerops_dir() / ".env"
-    if env.exists():
-        m = re.search(r"GEMINI_API_KEY=([A-Za-z0-9_\-]+)", env.read_text(encoding="utf-8"))
-        if m and "your_" not in m.group(1):
-            return m.group(1)
-    return ""
+            raw = ""
+    if not raw:
+        env = careerops_dir() / ".env"
+        if env.exists():
+            m = re.search(r"GEMINI_API_KEY=([A-Za-z0-9_.\-]+)",
+                          env.read_text(encoding="utf-8"))
+            if m and "your_" not in m.group(1):
+                raw = m.group(1)
+    return raw
+
+
+def gemini_status() -> str:
+    """Human-readable state of the Gemini fallback lane ('' when it's fine)."""
+    from pathlib import Path
+    import yaml as _yaml
+    cfg = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
+    try:
+        raw = ((_yaml.safe_load(cfg.read_text(encoding="utf-8")) or {})
+               .get("api_keys", {}) or {}).get("gemini_key", "") or ""
+    except Exception:
+        raw = ""
+    return gemini_key_problem(raw)
 
 
 def _gemini_chat(prompt: str, max_tokens=1400) -> str:
