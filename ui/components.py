@@ -51,13 +51,17 @@ def hero(title: str, subtitle: str, kicker: str = "", logo_b64: str = "") -> Non
     mark_html = (f"<h1><span class='w1'>{head}</span> "
                  f"<span class='w2'>{tail}</span></h1>")
 
+    # Subtitle lives INSIDE the left column now. Previously it sat below the grid,
+    # which forced the flow to hug the top and left dead space beneath it.
     st.markdown(
         f"""<div class='hero'>
   <div class='hero-grid'>
-    <div class='hero-id'>{mark}<div>{k}{mark_html}</div></div>
+    <div class='hero-left'>
+      <div class='hero-id'>{mark}<div>{k}{mark_html}</div></div>
+      <p>{_esc(subtitle)}</p>
+    </div>
     <div class='hero-flow'>{''.join(steps)}</div>
   </div>
-  <p>{_esc(subtitle)}</p>
 </div>""", unsafe_allow_html=True)
 
 
