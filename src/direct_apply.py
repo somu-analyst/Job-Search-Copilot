@@ -80,46 +80,100 @@ def _match(want: str, candidates: list[tuple[str, str]]) -> str:
 
 
 # ── portal adapters: each returns [(title, apply_url), ...] for a search ──────
+_PARENS = re.compile(r"\([^)]*\)")
+_TAIL = re.compile(r"\s*[-–—|,:]\s*"
+                   r"(hybrid|remote|onsite|on-site|contract|w2|c2c|usa?|full[- ]time)"
+                   r"\b.*$", re.I)
+
+
+def _query_variants(title: str) -> list[str]:
+    """Progressively looser search strings for one job title.
+
+    THE bug this exists to kill: an ATS `searchText` is an AND over every word you
+    give it. So "Senior Regulatory Reporting Data Analyst (CCAR Y14)" returns
+    ZERO — not because the job is missing, but because no posting body contains
+    the literal token "Y14)". Drop the parenthetical and the same search returns
+    32 hits. Feeding the raw title into search silently produced a dead end for
+    any title carrying a suffix — "(AVP)", "— Hybrid", "Sr." — and the resolver
+    then fell back to a careers landing page, which is the link you complained
+    about. Half the board was landing pages because of this one line.
+
+    So: try the exact title, then a de-punctuated one, then the first N words.
+    First variant that returns anything wins; `_match` still has to agree it's the
+    right job, so widening the SEARCH never loosens the MATCH.
+    """
+    t = (title or "").strip()
+    out, seen = [], set()
+
+    def add(x: str) -> None:
+        x = " ".join(x.split())
+        if x and x.lower() not in seen:
+            seen.add(x.lower())
+            out.append(x)
+
+    add(t)
+    clean = _TAIL.sub("", _PARENS.sub(" ", t))       # kill "(CCAR Y14)" / "— Hybrid"
+    clean = re.sub(r"[^\w\s&/-]", " ", clean)        # kill stray punctuation
+    add(clean)
+    words = clean.split()
+    for n in (6, 5, 4, 3):                           # then just the head of the title
+        if len(words) > n:
+            add(" ".join(words[:n]))
+    return out[:5]
+
+
 def _workday(ref: str, title: str) -> list[tuple[str, str]]:
     """ref = 'host|tenant|site'."""
     try:
         host, tenant, site = ref.split("|")
-        r = requests.post(f"https://{host}/wday/cxs/{tenant}/{site}/jobs",
-                          json={"appliedFacets": {}, "limit": 20, "offset": 0,
-                                "searchText": title},
-                          headers=HDR, timeout=TIMEOUT)
-        if r.status_code != 200:
-            return []
-        out = []
-        for j in r.json().get("jobPostings", []):
-            path = j.get("externalPath", "")
-            if path:
-                out.append((j.get("title", ""), f"https://{host}/en-US/{site}{path}"))
-        return out
-    except Exception:
+    except ValueError:
         return []
+    for q in _query_variants(title):
+        try:
+            # limit=20 is Workday's hard max — 50 gets a flat 400, which silently
+            # looked like "no such job" and sent you to a careers landing page.
+            r = requests.post(f"https://{host}/wday/cxs/{tenant}/{site}/jobs",
+                              json={"appliedFacets": {}, "limit": 20, "offset": 0,
+                                    "searchText": q},
+                              headers=HDR, timeout=TIMEOUT)
+            if r.status_code != 200:
+                return []
+            out = []
+            for j in r.json().get("jobPostings", []):
+                path = j.get("externalPath", "")
+                if path:
+                    out.append((j.get("title", ""),
+                                f"https://{host}/en-US/{site}{path}"))
+            if out:
+                return out
+        except Exception:
+            return []
+    return []
 
 
 def _radancy(ref: str, title: str) -> list[tuple[str, str]]:
     """ref = base portal url, e.g. https://jobs.citizensbank.com"""
-    try:
-        r = requests.get(f"{ref.rstrip('/')}/search-jobs/results",
-                         params={"ActiveFacetID": 0, "CurrentPage": 1,
-                                 "RecordsPerPage": 25, "Distance": 50,
-                                 "RadiusUnitType": 0, "Keywords": title,
-                                 "SearchType": 5, "SortCriteria": 0,
-                                 "SortDirection": 0,
-                                 "SearchResultsModuleName": "Search Results",
-                                 "SearchFiltersModuleName": "Search Filters"},
-                         headers=HDR, timeout=TIMEOUT)
-        if r.status_code != 200:
+    for q in _query_variants(title):        # same AND-over-words trap as Workday
+        try:
+            r = requests.get(f"{ref.rstrip('/')}/search-jobs/results",
+                             params={"ActiveFacetID": 0, "CurrentPage": 1,
+                                     "RecordsPerPage": 50, "Distance": 50,
+                                     "RadiusUnitType": 0, "Keywords": q,
+                                     "SearchType": 5, "SortCriteria": 0,
+                                     "SortDirection": 0,
+                                     "SearchResultsModuleName": "Search Results",
+                                     "SearchFiltersModuleName": "Search Filters"},
+                             headers=HDR, timeout=TIMEOUT)
+            if r.status_code != 200:
+                return []
+            html = r.json().get("results", "") or ""
+            pairs = re.findall(r'<a href="(/job/[^"]+)"[^>]*>\s*<h2[^>]*>([^<]+)</h2>',
+                               html, re.S)
+            if pairs:
+                return [(t.strip(), ref.rstrip("/") + h) for h, t in pairs]
+        except Exception:
             return []
-        html = r.json().get("results", "") or ""
-        pairs = re.findall(r'<a href="(/job/[^"]+)"[^>]*>\s*<h2[^>]*>([^<]+)</h2>',
-                           html, re.S)
-        return [(t.strip(), ref.rstrip("/") + h) for h, t in pairs]
-    except Exception:
-        return []
+    return []
 
 
 def _greenhouse(ref: str, title: str) -> list[tuple[str, str]]:
@@ -147,19 +201,78 @@ def _lever(ref: str, title: str) -> list[tuple[str, str]]:
 
 def _smartrecruiters(ref: str, title: str) -> list[tuple[str, str]]:
     try:
-        r = requests.get(f"https://api.smartrecruiters.com/v1/companies/{ref}/postings",
-                         params={"q": title, "limit": 25}, headers=HDR, timeout=TIMEOUT)
-        if r.status_code != 200:
-            return []
-        out = []
-        for j in r.json().get("content", []):
-            jid = j.get("id", "")
-            nm = j.get("name", "")
-            if jid:
-                out.append((nm, f"https://jobs.smartrecruiters.com/{ref}/{jid}"))
-        return out
+        for q in _query_variants(title):    # same AND-over-words trap as Workday
+            r = requests.get(
+                f"https://api.smartrecruiters.com/v1/companies/{ref}/postings",
+                params={"q": q, "limit": 50}, headers=HDR, timeout=TIMEOUT)
+            if r.status_code != 200:
+                return []
+            out = []
+            for j in r.json().get("content", []):
+                jid = j.get("id", "")
+                nm = j.get("name", "")
+                if jid:
+                    out.append((nm, f"https://jobs.smartrecruiters.com/{ref}/{jid}"))
+            if out:
+                return out
+        return []
     except Exception:
         return []
+
+
+_FEED_CACHE: dict[str, list[tuple[str, str]]] = {}
+
+
+def _workday_all(ref: str) -> list[tuple[str, str]]:
+    """Every live posting at a Workday employer, by paging searchText=''.
+
+    Keyword search can't prove a NEGATIVE: "no results" might mean the job is
+    gone, or that the query was bad. Only the full board can tell those apart —
+    and telling them apart is the difference between retiring a dead posting and
+    dumping you on a careers landing page.
+
+    Costs one pass per employer (20 rows/page, Workday's hard max), cached for
+    the run, and only ever reached when the cheap keyword search already failed.
+    """
+    if ref in _FEED_CACHE:
+        return _FEED_CACHE[ref]
+    out: list[tuple[str, str]] = []
+    complete = False
+    try:
+        host, tenant, site = ref.split("|")
+        offset, total = 0, None
+        while offset < 6000:
+            r = requests.post(f"https://{host}/wday/cxs/{tenant}/{site}/jobs",
+                              json={"appliedFacets": {}, "limit": 20,
+                                    "offset": offset, "searchText": ""},
+                              headers=HDR, timeout=TIMEOUT)
+            if r.status_code != 200:
+                break
+            d = r.json()
+            # Workday reports `total` ONLY on the first page; every later page
+            # says total:0. Overwriting it made the loop exit after 2 pages, so a
+            # 1,050-job board looked like 40 — and a truncated board would have
+            # declared live jobs "closed". Keep the first total; never re-read it.
+            if total is None:
+                total = d.get("total") or 0
+            page = d.get("jobPostings") or []
+            if not page:
+                break
+            for j in page:
+                path = j.get("externalPath", "")
+                if path:
+                    out.append((j.get("title", ""), f"https://{host}/en-US/{site}{path}"))
+            offset += 20
+            if offset >= total:
+                complete = True
+                break
+    except Exception:
+        pass
+    # A PARTIAL board is worse than none: absence from it would look like proof
+    # the job is closed when we simply stopped early. Only cache (and therefore
+    # only ever trust) a board we actually finished pulling.
+    _FEED_CACHE[ref] = out if complete else []
+    return _FEED_CACHE[ref]
 
 
 _BOFA_FEED: list[tuple[str, str]] | None = None
@@ -203,11 +316,45 @@ def _bofa(ref: str, title: str) -> list[tuple[str, str]]:
 ADAPTERS = {"workday": _workday, "radancy": _radancy, "greenhouse": _greenhouse,
             "lever": _lever, "smartrecruiters": _smartrecruiters, "bofa": _bofa}
 
-# Adapters that return the employer's ENTIRE live job list rather than the
-# results of a keyword query. For these — and only these — "the title isn't in
-# there" proves the posting is closed, so we can retire the job instead of
-# handing you a link that goes nowhere.
-FULL_FEED_ADAPTERS = {"bofa"}
+# For each portal kind, how to pull the employer's ENTIRE live board.
+#
+# This is the backbone of the whole resolver. Keyword search is a cheap guess: it
+# is brittle (an ATS ANDs every word, so one stray "(CCAR Y14)" returns nothing)
+# and it can never prove a negative. The full board is authoritative on both
+# counts — it always contains the job if the job exists, and if it doesn't
+# contain the job, the posting is CLOSED.
+#
+# So the resolver asks two questions in order:
+#   1. cheap keyword search  -> found it? done, one request.
+#   2. full board            -> found it? done. NOT in it? the job is dead, and
+#                               we retire it instead of inventing a link.
+# Greenhouse and Lever ignore the query anyway and hand back the whole board, so
+# for them step 1 already IS step 2.
+FULL_FEEDS = {
+    "bofa": lambda ref: _bofa(ref, ""),
+    "workday": _workday_all,
+    "greenhouse": lambda ref: _greenhouse(ref, ""),
+    "lever": lambda ref: _lever(ref, ""),
+}
+
+
+def find_posting(kind: str, ref: str, title: str) -> tuple[str, str]:
+    """(url, outcome) for one job at a known portal.
+
+    outcome: 'portal' = exact posting found · 'gone' = employer's full board
+    doesn't have it, so it's closed · '' = we couldn't tell.
+    """
+    hit = _match(title, ADAPTERS[kind](ref, title))          # cheap search first
+    if hit:
+        return hit, "portal"
+    puller = FULL_FEEDS.get(kind)
+    if not puller:
+        return "", ""                                        # can't prove anything
+    feed = puller(ref)
+    if not feed:
+        return "", ""                                        # network/parse failure
+    hit = _match(title, feed)
+    return (hit, "portal") if hit else ("", "gone")
 
 # Employers whose portal we already know (grows via discovery below).
 KNOWN_PORTALS: dict[str, tuple[str, str]] = {
@@ -349,7 +496,7 @@ def resolve_one(company: str, title: str, url: str, portal: tuple[str, str] | No
         return url
     kind, ref = portal if portal else discover_portal(company)
     if kind:
-        hit = _match(title, ADAPTERS[kind](ref, title))
+        hit, _ = find_posting(kind, ref, title)
         if hit:
             return hit
     return search_fallback(company, title)
@@ -398,25 +545,23 @@ def resolve_all(conn, limit: int = 2000, verbose: bool = True) -> dict:
                     print(f"  portal: {company} -> {kind}")
 
         kind, ref = portals[key]
-        found, cands = "", []
+        found, outcome = "", ""
         if kind:
             looked_up += 1
-            cands = ADAPTERS[kind](ref, title)
-            found = _match(title, cands)
-        if found:                                    # Tier 2
+            found, outcome = find_posting(kind, ref, title)
+        if found:                                    # Tier 2 — the exact posting
             conn.execute("UPDATE jobs SET apply_url=? WHERE url=?", (found, url))
             stats["portal"] += 1
             continue
 
-        # The posting is GONE. Only trustworthy for a full-feed adapter: it hands
-        # back every live job at that employer, so absence really is absence. A
-        # keyword-search adapter returning nothing might just be a bad query, and
-        # wrongly burying a live job is worse than showing a weak link.
-        # `cands` must be non-empty or we'd mark the world stale on a network blip.
-        if kind in FULL_FEED_ADAPTERS and cands:
+        # 'gone' means we pulled the employer's ENTIRE live board and the job
+        # wasn't on it. That's proof, not a guess — so retire it rather than hand
+        # over a careers landing page that can't take an application. Only
+        # find_posting() can say this, and only when the board actually loaded.
+        if outcome == "gone":
             conn.execute(
                 "UPDATE jobs SET status='stale', notes=? WHERE url=? AND status='new'",
-                (f"Not in {company}'s live careers feed — posting closed.", url))
+                (f"Not on {company}'s live careers board — posting closed.", url))
             stats["gone"] += 1
             continue
 

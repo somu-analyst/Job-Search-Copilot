@@ -138,3 +138,35 @@ Every request Srinivas makes + every suggestion Claude proposes, with status.
 **Judgement calls made (say if you disagree):**
 - **Salary cut from the grid** — only **6 of 1,395** postings (0.4%) list one, so it was a blank column charging full width. It survives as a chip in the row dialog.
 - **41% of jobs get no Skills tags** — 576 of them have *no description at all* and a generic title ("Data Analytics Senior Analyst"). Only **3** are genuine tagger misses. 1,257 of 1,395 jobs ship no description, so most tags come from the title alone.
+
+| # | Ask | Status |
+|---|-----|--------|
+| I1 | Same column positions in every tab | ✅ One `JOB_COLS` + `job_columns()` in app.py. Today, Jobs, Applied and the Resume Studio picker all use it. Tabs may APPEND (Applied adds "Applied on") but never reorder. |
+| I2 | Resume Studio option alongside Apply, in Jobs + Today | ✅ New **📄** column in every queue: tick it and the job is queued to Resume Studio, which then opens with that job already selected. Today's cards get a **📄 Tailor** button next to Apply. |
+| I3 | "You only fixed BoA — Truist has the same issue. Fix ALL job links." | ✅ Root cause was general, see below. |
+
+### The apply-link bug was never about one bank
+
+An ATS `searchText` is an **AND over every word**. Feeding it the raw job title
+means one stray token kills the search:
+`"Senior Regulatory Reporting Data Analyst (CCAR Y14)"` → **0 results** at Truist.
+Drop the `(CCAR Y14)` → **32 results**. Zero results → the resolver fell back to a
+careers landing page. That is the link you kept landing on, and it explains
+**690 of 1,391 links (50%)**, not just BoA and Truist.
+
+Fixes, all at the adapter layer so they apply to every employer:
+- `_query_variants()` — try the exact title, then de-punctuated, then the first
+  N words. Widens the SEARCH; `_match` still has to agree, so it never loosens
+  the MATCH.
+- **Full board = the authority.** Keyword search can't prove a negative. Every
+  portal kind now has a full-board puller (Workday paged, BoA, Greenhouse,
+  Lever). Search first (cheap); if it misses, pull the whole board. On it → exact
+  link. Not on it → the posting is **closed**, so retire it instead of faking a link.
+
+Two bugs caught only because I checked the numbers instead of trusting them:
+- `limit=50` on Workday returns a flat **400**. Its max is 20. Silently looked
+  like "no such job".
+- Workday reports `total` **only on the first page** (later pages say `total:0`).
+  Overwriting it made a **1,050-job board look like 40** — and a truncated board
+  would have declared *live* jobs closed. It now refuses to cache, or trust, a
+  board it didn't finish pulling.
