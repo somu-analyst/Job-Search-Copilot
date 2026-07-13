@@ -14,7 +14,12 @@ Options (pass as argv[1], default 1):
   1  archer   — the boy at full draw, loosing the trishoolam
   2  upright  — trishoolam standing, bow as a crescent behind it
   3  crossed  — bow and trishoolam crossed, like a crest
-  4  mark     — bow + trishoolam only, no figure (used for the favicon)
+  4  mark     — bow + trishoolam only, no figure
+  5  stacked  — bow above, trishoolam below
+  6  thirdeye — Shiva's third eye: the eye that sees what you can't
+  7  smiley   — SHIPPED. The smile IS the bow, drawn back on an orange arrow.
+                Reads as a friendly face at 16px and as a loaded bow at 512px,
+                so it survives the browser tab without giving up the meaning.
 """
 import sys
 from pathlib import Path
@@ -323,8 +328,54 @@ def opt_thirdeye(size=S):
     return img
 
 
+def opt_smiley(size=S):
+    """A smiling face whose mouth IS a bow — the string drawn back, an arrow on
+    the aim. Reads as a smiley at 16px (two eyes, a curve) and as a bow the
+    moment you look closer, which is the whole point of the app: it's cheerful
+    about a thing that is normally miserable, and it hits what it aims at.
+    """
+    img = _shell(size)
+    d = ImageDraw.Draw(img)
+    B = float(size)
+    cx = B * 0.5
+
+    # eyes — plain filled dots, set WIDE so the arrow between them never reads as
+    # a nose. Anything cleverer than a dot dies below 24px anyway.
+    r_e = B * 0.060
+    for ex in (B * 0.285, B * 0.715):
+        d.ellipse([ex - r_e, B * 0.335 - r_e, ex + r_e, B * 0.335 + r_e], fill=CREAM)
+
+    # mouth = the bow limbs. A quadratic arc, thick, cream — at a glance a smile.
+    lx, rx, ly = B * 0.205, B * 0.795, B * 0.555
+    dip = B * 0.86                        # how deep the smile/bow bends
+    limb = _bez((lx, ly), (cx, dip), (rx, ly), n=48)
+    d.line(limb, fill=CREAM, width=int(B * 0.055), joint="curve")
+    for tipx in (lx, rx):                 # rounded nocks so the limbs don't cut off
+        r_t = B * 0.028
+        d.ellipse([tipx - r_t, ly - r_t, tipx + r_t, ly + r_t], fill=CREAM)
+
+    # bowstring — straight across the tips, pulled back to meet the arrow's nock.
+    # Thin: it's the mechanism, not the message. It turns the smile into a LOADED
+    # bow for whoever looks twice, and stays invisible to whoever doesn't.
+    pull = B * 0.605
+    d.line([(lx, ly), (cx, pull)], fill=(232, 244, 236), width=int(B * 0.013))
+    d.line([(cx, pull), (rx, ly)], fill=(232, 244, 236), width=int(B * 0.013))
+
+    # arrow on the string, pointing UP and out of the mark — the aim, in orange.
+    # It stops SHORT of the eye line: the smile has to stay the hero, and an arrow
+    # that runs the full height reads as a stab rather than a shot.
+    d.line([(cx, pull), (cx, B * 0.455)], fill=ORANGE, width=int(B * 0.026))
+    hw, hy = B * 0.048, B * 0.455
+    d.polygon([(cx, B * 0.375), (cx - hw, hy), (cx + hw, hy)], fill=ORANGE)
+    return img
+
+
 OPTIONS = {1: opt_archer, 2: opt_upright, 3: opt_crossed, 4: opt_mark,
-           5: opt_stacked, 6: opt_thirdeye}
+           5: opt_stacked, 6: opt_thirdeye, 7: opt_smiley}
+
+# Options with a human figure or fine detail lose their subject below ~32px, so
+# the browser tab falls back to the simple bow mark instead of a green smudge.
+TOO_FINE_FOR_A_FAVICON = (1, 5)
 
 
 def write(choice: int = 1):
@@ -332,10 +383,10 @@ def write(choice: int = 1):
     main = OPTIONS[choice](S)
     main.resize((512, 512), Image.LANCZOS).save(OUT / "logo.png")
     main.resize((180, 180), Image.LANCZOS).save(OUT / "logo-180.png")
-    mark = opt_mark(S)                       # tab always gets the legible mark
+    mark = opt_mark(S) if choice in TOO_FINE_FOR_A_FAVICON else OPTIONS[choice](S)
     mark.resize((64, 64), Image.LANCZOS).save(OUT / "favicon.png")
     mark.resize((32, 32), Image.LANCZOS).save(OUT / "favicon-32.png")
-    print(f"wrote logo (option {choice}) + favicon (bow mark)")
+    print(f"wrote logo (option {choice}) + favicon")
 
 
 if __name__ == "__main__":

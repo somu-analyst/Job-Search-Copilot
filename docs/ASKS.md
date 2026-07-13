@@ -114,3 +114,15 @@ Every request Srinivas makes + every suggestion Claude proposes, with status.
 | LinkedIn contact scraping | Same ban risk; also performs worse than a hand-sent note |
 | Paid AI models | He said free-only |
 | Resume upload to Dice / HireITPeople | He said don't expose the resume — never happened |
+
+## Session — 2026-07-12
+
+| # | Ask | Status |
+|---|-----|--------|
+| G1 | Clean the repo — stop name-dropping other brands/projects everywhere | ✅ Brand names out of `theme.py`, `config.toml`, `app.py`, README prose. Dead `tools/gen_logo_ai.py` deleted. |
+| G2 | Move "inspired by" to one small section at the end, not the front page | ✅ 7-row prior-art table → one `<sub>` Credits line at the very bottom of README. |
+| G3 | Logo: make the bow small, or switch to a smiley | ✅ **Both** — the smile IS the bow, string drawn back on an orange arrow (`make_logo.py 7`). Reads as a face at 32px, a loaded bow at 512px. |
+| G4 | Bank of America "company website" opened the full job list, not the job | ✅ Root cause: BoA reads `search=` as a **mode** (`getAllJobs`), not a query — so `?search={title}` renders everything. Added a real `_bofa` adapter (pulls all ~1,800 live jobs, matches to the exact `job-detail` URL). |
+| G5 | …and get me the right link for *that* VP AML role | ⚠️ **The posting is closed.** Not in BoA's 1,797 live jobs; Jooble's own URL says `jobAge=92`. Web search finds only aggregator echoes. Nothing to link to. |
+
+**New capability that fell out of G4/G5:** for employers whose portal returns their *whole* live feed, absence now proves closure — those jobs are auto-retired to `stale` with a reason, instead of being handed a link that goes nowhere. 4 dead BoA jobs retired on the first run.

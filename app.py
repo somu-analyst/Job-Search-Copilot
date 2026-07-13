@@ -252,7 +252,7 @@ def job_board(kp: str, default_status=None, height=460):
             "apply_url": st.column_config.LinkColumn(
                 "Apply", display_text="apply ↗",
                 help="Direct link to the employer's own application page — "
-                     "skips reposters like Lensa/Talentify."),
+                     "skips third-party reposters."),
             "url": st.column_config.LinkColumn("Source", display_text="src ↗"),
             "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES),
             "score": st.column_config.NumberColumn("Fit", format="%.1f", width="small",
