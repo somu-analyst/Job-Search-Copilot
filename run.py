@@ -11,7 +11,7 @@ top URLs to career-ops for LLM scoring later.
 """
 import sys
 from src import (db, scrape_boards, scrape_workday, scrape_apis, score, sponsors,
-                 direct_apply)
+                 direct_apply, tags)
 
 
 def main() -> int:
@@ -37,6 +37,7 @@ def main() -> int:
 
     print("Post-processing:")
     score.score_all(conn)
+    tags.tag_all(conn)          # Skills column + Skills filter in the app
     n_seed = sponsors.enrich_seeds(conn)
     if n_seed:
         print(f"  sponsor seeds applied to {n_seed} companies")
