@@ -1,85 +1,130 @@
-# 🧭 Job Search Copilot
+# 🏹 Job Search Copilot
 
-**Your AI job-search copilot — find · tailor · apply · track.** A **local, token-free**
-job-search automation tool: it discovers roles across 6 sources (Indeed, LinkedIn,
-Google, **direct Workday employer APIs**, Adzuna, Jooble), scores each against your
-resume, AI-tailors your resume per job, screens for visa/location deal-breakers, and
-tracks every application through a clean Streamlit dashboard.
+**find · tailor · apply · track** — a local, token-free job-search engine.
 
-Give it your resume + target keywords and it builds your whole pipeline. Generic and
-shareable — anyone can use it. No monthly fees, no cloud, no data leaves your machine
-(`data/jobs.db`). AI runs on free models (OpenRouter / Gemini).
+It finds roles across every source it can reach, scores each one against *your* resume,
+writes and scores tailored versions of that resume per job, links you **straight to the
+employer's own application page** (never a reposter), and tracks everything you sent and
+when.
 
-**What it automates:** discover → fit-score (1–10) → sponsorship/location screen →
-AI resume tailoring (with authenticity guard) → assisted apply (you press Submit) →
-track + follow-up reminders.
+Drop in your resume and your keywords. Nothing leaves your machine — the whole thing is
+a SQLite file (`data/jobs.db`) and a Streamlit app. AI runs on **free** models
+(OpenRouter / Gemini) and degrades gracefully to deterministic scoring when they're
+capped, so it never dead-ends.
 
-## Why the Workday lane matters
-Most scrapers only hit Indeed/LinkedIn (and get blocked by Glassdoor/ZipRecruiter).
-Every Workday customer also exposes a **public JSON careers API**
-(`/wday/cxs/{tenant}/{site}/jobs`) — the same endpoint the employer's own careers page
-calls. It isn't bot-blocked and costs nothing. One run already pulls **400+ real jobs**
-straight from Citi, PNC, Mastercard, Fiserv, Morgan Stanley, State Street, FIS, Nasdaq.
+Not tied to any one industry: the search terms, keywords and employer lists all live in
+`config/profile.yml`.
 
 ## Quick start
+
 ```bash
 pip install -r requirements.txt
-python run.py            # scrape boards + Workday → data/jobs.db
-streamlit run app.py     # open the tracker dashboard
+cp config/profile.example.yml config/profile.yml   # your keywords + API keys
+cp resume/cv.example.md       resume/cv.md         # your resume, in markdown
+
+python run.py            # scrape → score → resolve apply links → data/jobs.db
+streamlit run app.py     # open the app
 ```
 
-## How it works
+Both `config/profile.yml` and `resume/cv.md` are **gitignored** — your keys and your CV
+never get committed.
+
+## The pipeline
+
 ```
- job boards (JobSpy)  ─┐
- Indeed / LinkedIn /   │
- Google Jobs          │
-                       ├─►  filter titles (config/profile.yml)  ─►  data/jobs.db
- Workday JSON API     │        + register every company             │
- (verified tenants) ─┘          in the directory                   │
-                                                                     ▼
-                                                       Streamlit app (app.py)
-                                              Jobs table · Company directory · Funnel
+  boards (JobSpy)      ─┐
+  Indeed / LinkedIn /   │
+  Google Jobs           │
+                        │        title + location filter          ┌────────────────┐
+  Workday JSON APIs    ─┼──────► dedupe on URL              ─────►│  data/jobs.db  │
+  (direct, unblockable) │        fit-score 1–10                   │  jobs          │
+                        │        H-1B sponsor tag                 │  companies     │
+  Adzuna / Jooble APIs ─┘        salary (FYI)                     │  resumes       │
+                                 resolve REAL apply link          └────────┬───────┘
+                                                                           ▼
+                                                              Streamlit app (app.py)
 ```
 
-- **`run.py`** — orchestrator. `--boards` / `--workday` for one lane; `--sponsors` adds live H-1B filing lookups. Every run also: scores all new jobs ($0 keyword model), applies sponsor seeds, archives stale unreviewed jobs (>21 days).
-- **`src/score.py`** — token-free fit score 0–5 (core-fit keywords + seniority + sponsor bonus). Jobs tab sorts by it.
-- **`src/sponsors.py`** — H-1B intelligence: curated sponsor map (yours to edit) + live filing counts from public DOL disclosure data (h1bdata.info). Own tab in the app.
-- **`src/scrape_boards.py`** — JobSpy multi-site scraper (proxy-ready).
-- **`src/scrape_workday.py`** — Workday JSON feeder. Add employers by appending to
-  `TENANTS`; use `python -m src.scrape_workday --probe <host> <tenant>` to find the site slug.
-- **`src/db.py`** — SQLite schema: `jobs` (with editable `status` = your tracker) + `companies` (auto-growing directory).
-- **`config/profile.yml`** — all keywords, search terms, sites, proxies. No code edits needed.
+## What makes it different
 
-## The company directory
-Every company seen in any scrape is recorded once, with its careers page and Workday
-API URL when known. Over time this becomes your own map of who hires for your field
-analytics — so you can check an employer directly even on days the boards miss it.
-Export to CSV from the Companies tab.
+**Direct apply links.** Aggregators bounce you through reposters (Lensa, Talentify) that
+often can't even take an application. `src/direct_apply.py` resolves a real employer link
+for **every** job, in four tiers: already-an-ATS → query the employer's own portal API
+(Workday / Greenhouse / Lever / SmartRecruiters / Radancy) → deep-link into their careers
+search → their careers page. It discovers each employer's ATS once and remembers it, so
+the company directory gets smarter every scan.
+
+**The Workday lane.** Most scrapers only hit Indeed/LinkedIn and get blocked elsewhere.
+Every Workday customer exposes a **public JSON careers API**
+(`/wday/cxs/{tenant}/{site}/jobs`) — the same endpoint their own careers page calls. It
+isn't bot-blocked, costs nothing, and yields hundreds of jobs with full descriptions.
+
+**Resume versions, scored.** For a given job it writes several tailored versions
+(Conservative / Balanced / ATS-max) plus your untouched master as a baseline, and scores
+each one against that JD from three angles — ATS keyword coverage, recruiter skim,
+hiring-manager depth. You *see* what a stronger reframe buys you in points and what it
+costs in authenticity, instead of guessing at a slider.
+
+**An authenticity guard.** Every tailored version is checked against your base resume for
+skills it doesn't support, numbers it never had, and hype it added. Over-claiming fails
+interviews and background checks; this catches it before you send.
+
+**A resume archive.** Every version you generate or edit is stored with a timestamp and
+the job it was for. Six months later, when a recruiter calls, you can pull up the exact
+resume they're holding.
+
+## Layout
+
+| Path | What it is |
+|------|-----------|
+| `run.py` | Orchestrator. `--boards` / `--workday` to run one lane; `--sponsors` adds live H-1B lookups. Every run scores, tags sponsors, backfills salary, resolves apply links, archives stale jobs. |
+| `app.py` | Streamlit frontend. Presentation only — no business logic. |
+| `ui/` | Design system + reusable components. Imports nothing from `src/`, so the frontend is swappable. |
+| `src/db.py` | SQLite schema: `jobs` (with your `status` tracker), `companies` (auto-growing directory), `resumes` (the archive). |
+| `src/scrape_boards.py` | JobSpy multi-board scraper (proxy-ready). |
+| `src/scrape_workday.py` | Workday JSON feeder. Add employers to `TENANTS`; `python -m src.scrape_workday --probe <host> <tenant>` finds the site slug. |
+| `src/scrape_apis.py` | Adzuna + Jooble (free keys). |
+| `src/direct_apply.py` | The apply-link resolver + ATS discovery. |
+| `src/score.py` | Token-free fit score, 1–10. |
+| `src/jd_match.py` | JD-vs-resume scoring, sponsorship/location screening. |
+| `src/ai.py` | Free-model layer (OpenRouter → Gemini → offline). Includes the authenticity check. |
+| `src/variants.py` | Builds and scores the resume versions. |
+| `src/resume_store.py` | The resume archive. |
+| `src/outreach.py` | Recruiter contact discovery + a `mailto:` draft you review and send. |
+| `src/sponsors.py` | H-1B sponsor map + live filing counts (public DOL data). |
+| `config/profile.yml` | **All** keywords, search terms, filters, API keys. No code edits needed. |
+
+## On the things this deliberately does *not* do
+
+- **It never submits an application for you.** Assisted apply opens the page and fills
+  what it can; you read it and press Submit. Auto-submitters violate site ToS and risk a
+  permanent ban on the account you need most.
+- **It doesn't scrape LinkedIn for recruiter emails.** That breaks LinkedIn's ToS, risks
+  your account, and cold-emailing guessed addresses performs *worse* than a connection
+  request you send by hand. It uses contacts the employer **published**, plus optional
+  Hunter.io (which has a real GDPR opt-out, unlike a scraped list).
+- **It only reads public job data** — the same endpoints careers pages already call.
 
 ## Ideas adapted from existing projects
-This repo deliberately borrows the good parts of the open-source job-hunt ecosystem
-and leaves out the risky parts (see table). It is **not** a fork of any of them.
 
-| Repo | What it does well | Adapted here? |
-|------|-------------------|---------------|
-| [speedyapply/JobSpy](https://github.com/speedyapply/JobSpy) | Battle-tested multi-board scraper (Indeed/LinkedIn/Google), proxy rotation | ✅ Used as our board-scraping engine (`scrape_boards.py`) |
-| [emredurukn/awesome-job-boards](https://github.com/emredurukn/awesome-job-boards) | Curated master list of job boards | ✅ Sourced extra finance/data boards (eFinancialCareers, DataJobs, icrunchdata…) for the roadmap |
-| [PaulMcInnis/JobFunnel](https://github.com/PaulMcInnis/JobFunnel) | Local CSV pipeline, dedup, block-list of stale jobs | ✅ Local-first DB + dedup-on-insert + status tracker |
-| [DaKheera47/job-ops](https://github.com/DaKheera47/job-ops) | End-to-end "job ops" pipeline with a UI | ✅ Inspired the run→store→dashboard split |
-| [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search) | AI relevance scoring of scraped jobs | ⚠️ Partial — we keep a `score` column; LLM scoring is optional (hand URLs to career-ops) to stay $0 |
-| [amusi/AI-Job-Recommend](https://github.com/amusi/AI-Job-Recommend) | Curated role recommendations | ⚠️ Concept only — our "core-fit ★" ranking is the lightweight version |
-| [AndrewStetsenko/tech-jobs-with-relocation](https://github.com/AndrewStetsenko/tech-jobs-with-relocation) | Relocation/visa-friendly listings | ⚠️ Repurposed as the H-1B **sponsor-priority** flag in the directory (not relocation) |
-| [GodsScion/Auto_job_applier_linkedIn](https://github.com/GodsScion/Auto_job_applier_linkedIn) | Auto-fills & submits LinkedIn Easy Apply | ❌ **Not adapted** — auto-submitting violates LinkedIn ToS and risks a permanent ban. We assist, you press submit. |
-| [can4hou6joeng4/boss-agent-cli](https://github.com/can4hou6joeng4/boss-agent-cli) | Agent for BOSS Zhipin (China board) | ❌ Not relevant to a US search |
+Deliberately borrows the good parts of the open-source job-hunt ecosystem and leaves out
+the risky parts. Not a fork of any of them.
 
-## Roadmap (easy next steps for your frontend)
-1. **More Workday employers** — probe & add tenants (host numbers are often non-obvious).
-2. **Careers-page auto-resolve** — for each new company in the directory, look up its careers URL.
-3. **Optional AI scoring** — fill the `score` column via a free model (OpenRouter) or career-ops.
-4. **Resume tailoring / cover letters** — hand a chosen job to career-ops (`/career-ops pdf`).
-5. **Richer frontend** — the SQLite DB is your API; swap Streamlit for React/Next if you like.
+| Repo | What it does well | Adapted? |
+|------|-------------------|----------|
+| [speedyapply/JobSpy](https://github.com/speedyapply/JobSpy) | Battle-tested multi-board scraper, proxy rotation | ✅ Our board-scraping engine |
+| [PaulMcInnis/JobFunnel](https://github.com/PaulMcInnis/JobFunnel) | Local-first pipeline, dedup, stale-job hygiene | ✅ Local DB + dedupe-on-insert + auto-archive |
+| [DaKheera47/job-ops](https://github.com/DaKheera47/job-ops) | End-to-end pipeline with a UI | ✅ Inspired the run→store→dashboard split |
+| [emredurukn/awesome-job-boards](https://github.com/emredurukn/awesome-job-boards) | Curated board list | ✅ Sourced extra boards for the roadmap |
+| [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search) | AI relevance scoring | ✅ Extended — free-model scoring *and* a deterministic fallback |
+| [AndrewStetsenko/tech-jobs-with-relocation](https://github.com/AndrewStetsenko/tech-jobs-with-relocation) | Visa-friendly listings | ⚠️ Repurposed as the H-1B sponsor-priority flag |
+| [GodsScion/Auto_job_applier_linkedIn](https://github.com/GodsScion/Auto_job_applier_linkedIn) | Auto-fills & submits LinkedIn Easy Apply | ❌ **Not adapted** — auto-submitting risks a permanent ban. We assist; you submit. |
 
-## Safety
-- Local-first: everything runs on your machine.
-- Never auto-submits an application — assist only.
-- Only reads **public** job data (the same endpoints careers pages already call).
+## Roadmap
+
+1. **More employer portals** — every ATS added to `direct_apply.py` upgrades a whole
+   class of jobs from "web search" to "exact posting".
+2. **Careers-page auto-resolve** for companies with no ATS match yet.
+3. **Interview tracker** — stages and notes on top of the `applied` pipeline.
+4. **Swap the frontend** — the SQLite DB is the API; `ui/` is isolated, so React/Next is
+   a drop-in replacement.

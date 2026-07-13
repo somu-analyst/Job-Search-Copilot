@@ -1,99 +1,116 @@
 # Ask Tracker — Job Search Copilot
 
 Every request Srinivas makes + every suggestion Claude proposes, with status.
-**Update this file whenever a new ask arrives or a status changes.**
-Status: ✅ done · 🔄 in progress · ⏳ pending (needs user) · ❌ dropped (with reason)
+**Update whenever a new ask arrives or a status changes.**
+✅ done · 🔄 in progress · ⏳ waiting on user · ❌ dropped (with reason)
 
 ---
 
-## A. Core system — job discovery & tracking
+## A. Core system
 
 | # | Ask | Status | Notes |
 |---|-----|--------|-------|
-| A1 | Standalone app, not Claude every time (no token burn) | ✅ | `run.py` + Streamlit; zero Claude tokens |
-| A2 | Streamlit frontend (not Excel) | ✅ | `app.py`, 7 tabs |
-| A3 | Auto-pull jobs 2×/day + score | ✅ | Windows Task `CareerOps-JobScan` 9AM/5PM |
-| A4 | Pull from ALL sources, not just Workday | ✅ | JobSpy (Indeed/LinkedIn/Google) + Adzuna + Jooble + 29 Workday tenants |
-| A5 | Numeric 1–10 score + "must apply" flag | ✅ | `score.py`, `MUST_APPLY_AT=8.0` |
-| A6 | Mark applied → moves to Applied tab w/ date; skip flag | ✅ | status + `date_applied` |
-| A7 | USA-primary filtering | ✅ | `is_us_location()` + Workday city-path check |
-| A8 | Freshness filter (pulled) **and** job-posted-date filter | ✅ | both `date_found` + `date_posted` |
-| A9 | Industry column | ✅ | `INDUSTRY_MAP` |
-| A10 | Company directory that grows from scraped jobs | ✅ | `companies` table, 385+ companies |
-| A11 | Salary shown as FYI (not a filter; blank if unlisted) | ✅ | API fields + JD regex; rejects "$23B portfolio" |
+| A1 | Standalone app, no Claude tokens per run | ✅ | `run.py` + Streamlit |
+| A2 | Streamlit frontend (not Excel) | ✅ | 8 tabs |
+| A3 | Auto-pull 2×/day + score | ✅ | Windows Task 9AM/5PM |
+| A4 | Pull from ALL sources | ✅ | Indeed/LinkedIn/Google + 29 Workday tenants + Adzuna + Jooble |
+| A5 | Numeric 1–10 score + must-apply flag | ✅ | `MUST_APPLY_AT = 8.0` |
+| A6 | Mark applied → Applied tab w/ date | ✅ | |
+| A7 | USA-primary filtering | ✅ | |
+| A8 | Freshness (pulled) **and** posted-date filter | ✅ | both |
+| A9 | Industry column | ✅ | |
+| A10 | Company directory grows from scrapes | ✅ | 385+ companies |
+| A11 | Salary shown as FYI, never a filter | ✅ | rejects notional figures ("$23B portfolio") |
 
-## B. Coverage — employers & keywords
+## B. Coverage
 
-| # | Ask | Status | Notes |
-|---|-----|--------|-------|
-| B1 | H-1B sponsors first; screen out citizen-only | ✅ | `sponsors.py` (~90 map) + `jd_flags()` |
-| B2 | Small institutions, credit unions, prime vendors, consulting | ✅ | in QUERIES |
-| B3 | SAS / SAS Viya as primary skill | ✅ | in QUERIES (banks list SAS in JD body, not titles) |
-| B4 | Compliance, reporting, data mgmt, leadership roles | ✅ | in QUERIES + `title_ok()` |
-| B5 | HSBC, MUFG, SMBC, Mizuho, Prudential, Fidelity, Vanguard, Liberty Mutual | ✅ | Workday tenants / sponsor map |
-| B6 | Trading & broking firms | ✅ | Raymond James, Ameriprise, BlackRock… |
-| B7 | California / Google-search jobs | ✅ | Google Jobs via JobSpy; US-wide |
+| # | Ask | Status |
+|---|-----|--------|
+| B1 | H-1B sponsors first; screen citizen-only | ✅ |
+| B2 | Small institutions, credit unions, vendors, consulting | ✅ |
+| B3 | SAS / SAS Viya as primary skill | ✅ |
+| B4 | Compliance, reporting, data mgmt, leadership | ✅ |
+| B5 | HSBC, MUFG, SMBC, Mizuho, Prudential, Fidelity, Vanguard… | ✅ |
+| B6 | Trading & broking firms | ✅ |
+| B7 | Google-search / California jobs | ✅ |
 
-## C. Resume maker & Apply center
-
-| # | Ask | Status | Notes |
-|---|-----|--------|-------|
-| C1 | ATS-clean resume, no emojis, drop odd "Target Role" | ✅ | `_ats_clean()` |
-| C2 | Multi-scores: recruiter / ATS-Workday / hiring-mgr / overall | ✅ | `jd_match.analyze()` |
-| C3 | Highlights + what's missing from the position | ✅ | |
-| C4 | AI-tailored resume with **1–10 strength slider** | ✅ | `tailor_summary(intensity)` |
-| C5 | Scores for the tailored version (before/after) | ✅ | |
-| C6 | Authenticity / over-claim alerts | ✅ | `authenticity_check()` |
-| C7 | User picks WHICH missing keywords to add | ✅ | multiselect |
-| C8 | View the JD (inline or sidebar) | ✅ | Workday API + stored descriptions |
-| C9 | Sponsorship / location deal-breaker screen | ✅ | `jd_flags()` |
-| C10 | Resume header line-wrap looked bad | ✅ | forced break between title + contact |
-| C11 | Best FREE AI models, no paid | ✅ | all fast `:free` OpenRouter + Gemini fallback |
-| C12 | Automate the Workday application itself | ⏳ | Playwright assisted-apply built; **never auto-submits** (ban risk). Needs your first login session |
-
-## D. Direct apply links (no reposters)
+## C. Resume
 
 | # | Ask | Status | Notes |
 |---|-----|--------|-------|
-| D1 | Citizens job opened Lensa, not the real portal | ✅ | direct link found; Citizens = Radancy, not Workday |
-| D2 | Do this for ALL jobs automatically after pulling | 🔄 | 4-tier resolver; **911/1395 (65%) linked, 0 reposters**; still running |
-| D3 | Auto-discover each employer's ATS into the directory | ✅ | 41 companies mapped (Workday/Greenhouse/Lever/SmartRecruiters/Radancy) |
+| C1 | ATS-clean, no emojis | ✅ | |
+| C2 | Recruiter / ATS / hiring-mgr / overall scores | ✅ | |
+| C3 | Highlights + what's missing | ✅ | |
+| C4 | AI tailoring, 1–10 strength slider | ✅ | |
+| C5 | Scores for the tailored version | ✅ | before/after deltas |
+| C6 | Authenticity / over-claim alerts | ✅ | |
+| C7 | Pick WHICH missing keywords to add | ✅ | |
+| C8 | View the JD | ✅ | |
+| C9 | Sponsorship / location deal-breaker screen | ✅ | |
+| C10 | Header line-wrap looked bad | ✅ | |
+| C11 | Free AI models only, no paid | ✅ | all `:free`, Gemini fallback, offline fallback |
+| C12 | Resume too much bold; cut "Won sponsorship"; cause→effect | ✅ | 25→17 bullets, 25→7 bolds, word "sponsorship" gone entirely |
+| C13 | New resume layout | ✅ | green rules, print-safe, still ATS-parseable |
+| C14 | Store every resume used, w/ timestamp + job | ✅ | `resumes` table + 🗂 My Resumes tab |
+| C15 | Multiple versions, pick best, preview all | ✅ | Master/Conservative/Balanced/ATS-max, scored |
+| C16 | Edit points myself, then re-score | ✅ | edit → re-score → archived as its own version |
+| C17 | Over-claim flags must show WHAT they are | ✅ | popover lists each claim; **fixed 3 checker bugs** |
 
-## E. UI / UX
+## D. Apply links
+
+| # | Ask | Status |
+|---|-----|--------|
+| D1 | Citizens opened Lensa, not the real portal | ✅ direct link found (Citizens = Radancy) |
+| D2 | Do it for ALL jobs, automatically | ✅ **1,395/1,395 (100%), 0 reposters** |
+| D3 | Auto-discover each employer's ATS into the directory | ✅ Workday/Greenhouse/Lever/SmartRecruiters/Radancy |
+
+## E. Outreach
 
 | # | Ask | Status | Notes |
 |---|-----|--------|-------|
-| E1 | Job picker: show headers + all columns, scrollable | ✅ | real table picker replaces flat dropdown |
-| E2 | Steps in boxes with arrows; Step 1 was eating half the page | ✅ | visual stepper + compact step boxes |
-| E3 | Premium/sellable SaaS look, less noise | ✅ | one primary + one accent, hairline borders, type scale |
-| E4 | Put Steps 2–4 in sub-tabs for a true single screen | ⏳ | **offered — awaiting your yes/no** |
+| E1 | Email recruiter / HR / hiring manager | ✅ | JD-published contacts + email-pattern guess + LinkedIn people-search + `mailto:` draft you review |
+| E2 | Scrape LinkedIn for contacts | ❌ | **Declined.** Breaks ToS, risks the account you need to job-hunt, and guessed-address cold email performs worse than a hand-sent connection request. Hunter.io hook built as the legal alternative. |
 
-## F. Repo, sharing, security
+## F. UI
 
-| # | Ask | Status | Notes |
-|---|-----|--------|-------|
-| F1 | Name the project | ✅ | **Job Search Copilot** 🧭 |
-| F2 | Own git repo, shareable — any user drops resume + keywords | ✅ | `profile.example.yml`, `cv.example.md` |
-| F3 | **Never commit keys; keep them secure** | ✅ | 0 keys in git history; `profile.yml` gitignored; verified on push |
-| F4 | Push to GitHub | ✅ | `github.com/somu-analyst/job-search-copilot` (private) |
-| F5 | Keep job project separate from NYSE_DATA stock bot | ✅ | verified: no job files in NYSE_DATA |
-| F6 | Track my asks + your suggestions in a table, every time | ✅ | **this file**; shown at end of each reply |
+| # | Ask | Status |
+|---|-----|--------|
+| F1 | Premium, sellable SaaS look | ✅ rebuilt; `ui/` layer split from logic |
+| F2 | Job picker: headers + all columns, scrollable | ✅ real table picker |
+| F3 | Steps in boxes with arrows | ✅ step rail |
+| F4 | Steps 2–4 on one screen | ✅ sub-tabs |
+| F5 | Not a monotone blue page | ✅ **Glassdoor green shell + Swiggy orange Apply** |
+| F6 | Title too small | ✅ 42px + logo |
+| F7 | Blank right side of hero | ✅ 5-stage system flow |
+| F8 | Logo: bow + trishoolam (Rudrarjun) | ✅ hand-drawn; Arjuna at full draw, one trishoolam |
+| F9 | Try Nano Banana / AI logo | ❌ **Dropped by user.** Gemini key 429s on *everything* (even free text); free FLUX generated 8 candidates but **none drew the trishoolam**. |
+
+## G. Repo & security
+
+| # | Ask | Status |
+|---|-----|--------|
+| G1 | Name the project | ✅ Job Search Copilot |
+| G2 | Generic + shareable, not BFSI-specific | ✅ all BFSI copy stripped from app + README |
+| G3 | **Never commit keys** | ✅ 0 keys in history; `profile.yml` + `cv.md` gitignored; verified on every push |
+| G4 | Push to GitHub | ✅ `github.com/somu-analyst/job-search-copilot` (private) |
+| G5 | Keep separate from the NYSE_DATA stock bot | ✅ verified clean |
+| G6 | Track my asks + your suggestions in a table | ✅ this file, shown each reply |
 
 ---
 
-## Pending — needs YOU
+## ⏳ Waiting on Srinivas (nothing is blocked on Claude)
 
 | # | Item | What to do |
 |---|------|-----------|
-| C12 | First assisted-apply session | Pick a job → Assisted Apply → log into the portal → review & submit yourself |
-| E4 | Steps 2–4 as sub-tabs? | Say yes and I'll do it |
-| G1 | Target salary range | You chose: show listed salary as FYI, no filter → **closed** ✅ |
-| G2 | AI daily cap | Free tiers reset on their own. $10 OpenRouter credit = 1,000/day (optional; you said free-only) |
+| 1 | **Regenerate the Gemini key** | Current key 429s on even the free text model — that's why AI tailoring stays capped. [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → **"Create API key in a new project"**. Free. Fixes AI tailoring. |
+| 2 | **First assisted-apply run** | Resume Studio → pick a job → Step 4 → *Launch assisted apply* → sign in once → review → **you** press Submit. |
+| 3 | **Hunter.io key** (optional) | hunter.io free tier (~25/mo) → real verified recruiter contacts. |
 
-## Explicitly dropped (by your call)
+## ❌ Deliberately not built
 
 | Item | Why |
 |------|-----|
-| Auto-submit LinkedIn appliers | Ban risk — you agreed to skip |
-| Resume upload to Dice / HireITPeople | You said don't expose your resume; never happened |
-| Paid AI models | You said free only |
+| Auto-submit (LinkedIn Easy Apply etc.) | Permanent-ban risk on the account he needs most |
+| LinkedIn contact scraping | Same ban risk; also performs worse than a hand-sent note |
+| Paid AI models | He said free-only |
+| Resume upload to Dice / HireITPeople | He said don't expose the resume — never happened |
