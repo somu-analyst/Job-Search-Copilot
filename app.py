@@ -308,11 +308,11 @@ def job_dialog(row: dict):
     a, b, c = st.columns(3)
     with a:
         st.link_button("✅ Apply on employer site", row["apply_url"],
-                       use_container_width=True, type="primary")
+                       width='stretch', type="primary")
     with b:
-        st.link_button("↗ Original posting", row["url"], use_container_width=True)
+        st.link_button("↗ Original posting", row["url"], width='stretch')
     with c:
-        if st.button("Mark applied", use_container_width=True, key="dlg_applied"):
+        if st.button("Mark applied", width='stretch', key="dlg_applied"):
             mark_applied(row["url"])
             st.rerun()
 
@@ -332,7 +332,7 @@ def job_board(kp: str, default_status=None, height=460):
             "Skills", tags.ALL_TAGS, key=f"{kp}_skills",
             placeholder="Skills — SAS, AML, Credit Risk…", label_visibility="collapsed")
     with bar_r:
-        with st.popover("⚙️ Filters", use_container_width=True):
+        with st.popover("⚙️ Filters", width='stretch'):
             skills_all = st.checkbox(
                 "Match ALL selected skills", key=f"{kp}_skills_all",
                 help="Off = any of them (wider). On = only jobs with every one "
@@ -416,7 +416,7 @@ def job_board(kp: str, default_status=None, height=460):
     view["location"] = df["location"].map(short_loc)
     view = view[JOB_COLS]
     edited = st.data_editor(
-        view, hide_index=True, use_container_width=True, height=height,
+        view, hide_index=True, width='stretch', height=height,
         column_config=job_columns(),
         # Only Status and the 📄 tick are yours to change here. Everything else is
         # a fact about the posting, not an opinion about it.
@@ -457,7 +457,7 @@ with st.sidebar:
     st.subheader("⚡ Run a scan")
     st.caption("Scrape → filter → dedupe → score → sponsor-tag → resolve apply "
                "links. Token-free.")
-    if st.button("⚡ Quick — Workday employers", use_container_width=True):
+    if st.button("⚡ Quick — Workday employers", width='stretch'):
         from src import scrape_workday
         with st.status("Scanning employer Workday APIs…", expanded=True) as s:
             n = scrape_workday.run(conn, verbose=False)
@@ -465,7 +465,7 @@ with st.sidebar:
             _post_process()
             s.update(label=f"Done — +{n} new jobs", state="complete")
         st.rerun()
-    if st.button("🌐 Full — all sources", use_container_width=True):
+    if st.button("🌐 Full — all sources", width='stretch'):
         from src import scrape_boards, scrape_workday, scrape_apis
         with st.status("Full scan — keep this tab open…", expanded=True) as s:
             st.write("1/3 Job boards…")
@@ -535,17 +535,17 @@ with t_today:
                     b1, b2, b3 = st.columns(3)
                     with b1:
                         st.link_button("✅ Apply", r["apply_url"],
-                                       use_container_width=True, type="primary")
+                                       width='stretch', type="primary")
                     with b2:
                         if st.button("📄 Tailor", key=f"t{r['rowid']}",
-                                     use_container_width=True,
+                                     width='stretch',
                                      help="Send to Resume Studio"):
                             st.session_state["rs_url"] = r["url"]
                             st.session_state["step_now"] = 2
                             st.success("Queued → open **📄 Resume Studio**.")
                     with b3:
                         if st.button("View", key=f"v{r['rowid']}",
-                                     use_container_width=True):
+                                     width='stretch'):
                             job_dialog(r.to_dict())
 
     st.divider()
@@ -562,7 +562,7 @@ with t_today:
     if fu.empty:
         st.caption("None due — you're on top of it.")
     else:
-        st.dataframe(fu, hide_index=True, use_container_width=True,
+        st.dataframe(fu, hide_index=True, width='stretch',
                      column_config={"url": st.column_config.LinkColumn(
                          "Link", display_text="open ↗")})
 
@@ -595,7 +595,7 @@ with t_applied:
         va["location"] = dfa["location"].map(short_loc)
         acols = JOB_COLS + ["date_applied"]
         edited = st.data_editor(
-            va[acols], hide_index=True, use_container_width=True, height=500,
+            va[acols], hide_index=True, width='stretch', height=500,
             column_config=job_columns({
                 "date_applied": st.column_config.TextColumn("Applied on", width="small"),
             }),
@@ -681,7 +681,7 @@ with t_resume:
         # already IN Resume Studio, so a button that sends you here is noise.
         pcols = [c for c in JOB_COLS if c != "tailor"]
         ev = st.dataframe(
-            grid[pcols], hide_index=True, height=260, use_container_width=True,
+            grid[pcols], hide_index=True, height=260, width='stretch',
             on_select="rerun", selection_mode="single-row",
             column_config=job_columns(), key="pick_grid")
         rows = ev.selection.rows if ev and ev.selection else []
@@ -694,9 +694,9 @@ with t_resume:
         b1, b2, _ = st.columns([1.2, 1.2, 2.6])
         with b1:
             st.link_button("✅ Apply on employer site", job["apply_url"],
-                           use_container_width=True, type="primary")
+                           width='stretch', type="primary")
         with b2:
-            st.link_button("↗ Original posting", job["url"], use_container_width=True)
+            st.link_button("↗ Original posting", job["url"], width='stretch')
         st.caption("Selected. Move to **2 · Fit scores** above. →")
 
     # JD + screening (shared by steps 2-4)
@@ -760,7 +760,7 @@ with t_resume:
                     "actually buys you — and what it costs in authenticity.")
         gc1, gc2 = st.columns([1.4, 2.6])
         with gc1:
-            if st.button("✨ Build resume versions", use_container_width=True,
+            if st.button("✨ Build resume versions", width='stretch',
                          type="primary"):
                 with st.spinner("Writing 3 tailored versions and scoring each…"):
                     vs = vz.build(job["url"], job["title"], job["company"],
@@ -801,7 +801,7 @@ with t_resume:
                         # Click through to see exactly which claim is the problem.
                         with st.popover(f"⚠️ {len(v['warnings'])} over-claim flag"
                                         f"{'s' if len(v['warnings']) > 1 else ''}",
-                                        use_container_width=True):
+                                        width='stretch'):
                             st.markdown(f"**{v['label']} — what this version claims "
                                         f"that your resume doesn't back up:**")
                             for w in v["warnings"]:
@@ -836,7 +836,7 @@ with t_resume:
                                        "edit did to the ATS/recruiter numbers.")
             e1, e2 = st.columns([1.2, 2.8])
             with e1:
-                if st.button("🔄 Re-score my edit", use_container_width=True):
+                if st.button("🔄 Re-score my edit", width='stretch'):
                     with st.spinner("Re-scoring your edited summary…"):
                         r = vz.rescore_edited(job["url"], job["title"], edited,
                                               jd_override=jd_text)
@@ -898,20 +898,20 @@ with t_resume:
             st.caption("ATS-clean: emoji-free, plain formatting, parser-safe.")
             st.download_button("⬇ Resume (HTML → Ctrl+P → PDF)", html_doc,
                                f"resume-{slugify(job['company'])[:30]}.html",
-                               "text/html", use_container_width=True, type="primary")
+                               "text/html", width='stretch', type="primary")
             st.download_button("⬇ Cover letter (.txt)",
                                rz.cover_letter(job["title"], job["company"]),
                                "cover-letter.txt", "text/plain",
-                               use_container_width=True)
+                               width='stretch')
             with st.expander("👁 Preview resume"):
                 components.html(html_doc, height=520, scrolling=True)
 
             st.divider()
             st.link_button("✅ Apply on employer site", job["apply_url"],
-                           use_container_width=True, type="primary")
+                           width='stretch', type="primary")
             st.caption("Assisted apply opens Chrome and fills what it can — "
                        "it **never** submits for you.")
-            if st.button("🚀 Launch assisted apply", use_container_width=True):
+            if st.button("🚀 Launch assisted apply", width='stretch'):
                 import subprocess, sys
                 subprocess.Popen([sys.executable, "apply_assist.py", job["url"]],
                                  cwd=str(db.DB_PATH.parent.parent),
@@ -919,7 +919,7 @@ with t_resume:
                 st.info("Chrome opening… sign in once per employer; it stays saved. "
                         "Review and press Submit yourself.")
             if st.button("✅ Mark applied (archives this resume)",
-                         use_container_width=True):
+                         width='stretch'):
                 mark_applied(job["url"])
                 rid = rs.save(conn, job_url=job["url"], job_title=job["title"],
                               company=job["company"], variant=final_label,
@@ -973,7 +973,7 @@ with t_resume:
                     if left == 0:
                         st.warning("Hunter.io searches exhausted for this month.")
                     elif st.button(f"🔎 Find recruiters at {job['company'][:20]}",
-                                   use_container_width=True,
+                                   width='stretch',
                                    help=f"Spends ONE Hunter.io search ({lbl}). "
                                         f"Cached forever after, so this employer is "
                                         f"never looked up twice — and one search "
@@ -1001,15 +1001,15 @@ with t_resume:
                             job_url=job["url"])
                         st.link_button("📨 Draft an email to them",
                                        og.mailto(e["value"], subj_h, body_h),
-                                       use_container_width=True)
+                                       width='stretch')
 
             st.markdown("**Find them on LinkedIn** (you connect manually)")
             for role in ("recruiter", "talent acquisition", "hiring manager"):
                 st.link_button(f"🔗 {role.title()} at {job['company'][:22]}",
                                og.linkedin_search(job["company"], role),
-                               use_container_width=True)
+                               width='stretch')
 
-            with st.popover("🔍 Guess their email pattern", use_container_width=True):
+            with st.popover("🔍 Guess their email pattern", width='stretch'):
                 st.caption(f"Corporate mail domain (guess): **{domain or 'unknown'}**")
                 gn1, gn2 = st.columns(2)
                 first = gn1.text_input("First name", key="og_first")
@@ -1036,7 +1036,7 @@ with t_resume:
                                    placeholder="recruiter@company.com")
                 if to:
                     st.link_button("📨 Open in my mail app", og.mailto(to, subj, body),
-                                   use_container_width=True, type="primary")
+                                   width='stretch', type="primary")
                     st.caption("Opens your own mail client, pre-filled and **unsent**. "
                                "Read it, personalise the first line, then send.")
                 else:
@@ -1062,7 +1062,7 @@ with t_arch:
         show = arch[["id", "created_at", "sent", "applied_at", "company", "job_title",
                      "variant", "overall", "ats", "recruiter", "hiring_manager"]]
         ev2 = st.dataframe(
-            show, hide_index=True, use_container_width=True, height=340,
+            show, hide_index=True, width='stretch', height=340,
             on_select="rerun", selection_mode="single-row",
             column_config={
                 "id": st.column_config.NumberColumn("#", width="small"),
@@ -1103,7 +1103,7 @@ with t_co:
                         key="co_kw", label_visibility="collapsed")
     if kw2:
         co = co[co["name"].str.contains(kw2, case=False, na=False)]
-    st.dataframe(co, hide_index=True, use_container_width=True, height=520,
+    st.dataframe(co, hide_index=True, width='stretch', height=520,
                  column_config={
                      "careers_url": st.column_config.LinkColumn("Careers",
                                                                 display_text="open ↗"),
@@ -1129,7 +1129,7 @@ with t_h1b:
                        AND sponsors_h1b NOT LIKE '0 filings%' THEN 1
                   WHEN sponsors_h1b LIKE 'moderate%' THEN 2
                   WHEN sponsors_h1b = '' THEN 3 ELSE 4 END, job_count DESC""")
-    st.dataframe(h, hide_index=True, use_container_width=True, height=440,
+    st.dataframe(h, hide_index=True, width='stretch', height=440,
                  column_config={
                      "sponsors_h1b": st.column_config.TextColumn("H-1B verdict"),
                      "careers_url": st.column_config.LinkColumn("Careers",
@@ -1137,7 +1137,7 @@ with t_h1b:
                  })
     q1, q2 = st.columns([1, 2])
     with q1:
-        if st.button("🔎 Live-lookup top 15 unverified", use_container_width=True):
+        if st.button("🔎 Live-lookup top 15 unverified", width='stretch'):
             with st.spinner("Querying h1bdata.info (rate-limited, ~30s)…"):
                 n = sp.enrich_live(conn, limit=15, verbose=False)
             st.success(f"Updated {n} companies.")
@@ -1162,7 +1162,7 @@ with t_ins:
     ui.section("🏆 Top hiring employers", "Who posts the most roles you match.")
     st.dataframe(load("""SELECT company, COUNT(*) jobs, SUM(is_core) core_fit
                          FROM jobs GROUP BY company ORDER BY jobs DESC LIMIT 25"""),
-                 hide_index=True, use_container_width=True, height=340)
+                 hide_index=True, width='stretch', height=340)
     st.download_button("⬇ Export all jobs (CSV)",
                        load("SELECT title,company,location,source,status,salary,"
                             "apply_url,url FROM jobs").to_csv(index=False),
