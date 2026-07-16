@@ -170,3 +170,21 @@ Two bugs caught only because I checked the numbers instead of trusting them:
   Overwriting it made a **1,050-job board look like 40** — and a truncated board
   would have declared *live* jobs closed. It now refuses to cache, or trust, a
   board it didn't finish pulling.
+
+## Session — 2026-07-15
+
+| # | Ask | Status |
+|---|-----|--------|
+| J1 | Clean the repo — stop name-dropping other brands everywhere; one small credit line, not front-page | ✅ Brand names stripped from theme/config/app/README; prior-art table → one `<sub>` credits line at the bottom; dead `gen_logo_ai.py` deleted |
+| J2 | Logo: make the bow small, or switch to a smiley | ✅ Option 7 — the smile IS the bow (orange arrow on a drawn string). Face at 32px, loaded bow at 512px |
+| J3 | Bank of America "company website" opened the full job list, not the job | ✅ `_bofa` adapter: BoA reads `search=` as a MODE not a query; pulls live feed, matches exact job-detail URL |
+| J4 | Uniform column positions across all tabs; Resume-Studio option alongside Apply | ✅ One `JOB_COLS`/`job_columns()`; 📄 tick queues a job to Resume Studio; used by Today/Jobs/Applied/picker |
+| J5 | No horizontal scroll in the queue; keyword/skills column + filter (SAS, AML, Credit Risk…); Apply in first columns | ✅ `src/tags.py` Skills column + top-bar Skills filter; 9 cols fit, Apply in col 3; `short_loc()` compacts Location |
+| J6 | `.bat` files on Desktop to run the app + the NYSE bot | ✅ Desktop launchers: Job Search Copilot (8601), Scan New Jobs, NYSE Telegram Bot (8502) |
+| J7 | Streamlit deprecation: `use_container_width` | ✅ All 33 → `width='stretch'`, verified no warnings in the log |
+| J8 | "Opening the NYSE bot shows Job Search Copilot" | ✅ Port collision — a stray app on 8502 (the bot's dashboard port). Pinned the app to 8601; launcher now idempotent |
+| J9 | "Run both bat files, second says stopped" | ✅ Leftover process squatted the port; killed all strays; `run_app.bat` now detects an already-running app and opens the browser instead of dying |
+| J10 | JPMorgan job opens career page, not the posting | ✅ `_jpmc` adapter (Oracle Recruiting Cloud CX_1001): 40 JPM jobs 0→23 exact, 7 flagged closed |
+| J11 | Validate URLs before placing; keep a logger (right/wrong); backtest all + future; search online for the right URL | ✅ `src/link_check.py`: validate→classify (exact/weak/dead)→`data/apply_audit.csv`; runs in scan + app refresh; ✓/🔍 badge in queue; backtest 734 exact/596 weak/2 dead; web fallback → precise Google search in your browser |
+
+**Honest limit on J11's "search online":** automated web-search scraping is blocked everywhere (DuckDuckGo 202, Bing/SearXNG 403/429, even a real headless browser). A script can't reliably do it. Your signed-in browser can — so the fallback hands you the exact pre-built Google search instead of faking a scrape.
