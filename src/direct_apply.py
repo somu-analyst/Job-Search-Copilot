@@ -313,8 +313,57 @@ def _bofa(ref: str, title: str) -> list[tuple[str, str]]:
     return _BOFA_FEED
 
 
+_JPMC_FEED: list[tuple[str, str]] | None = None
+
+
+def _jpmc(ref: str, title: str) -> list[tuple[str, str]]:
+    """JPMorgan Chase (Oracle Recruiting Cloud, site CX_1001).
+
+    careers.jpmorgan.com is a marketing shell that redirects into Oracle; the
+    old `?keywords={title}` fallback landed you on that shell's search page, not
+    a posting. Worse, Oracle's keyword search ANDs every word AND is flaky under
+    load, so title-matching by query is unreliable.
+
+    The no-keyword feed, by contrast, pages cleanly (200/req) and is
+    authoritative — it holds every live JPMorgan req, so a title that's absent is
+    a posting that has CLOSED. We pull it once, cache it, match in memory. `Id`
+    is the requisition number; the candidate-experience job URL is built from it.
+    """
+    global _JPMC_FEED
+    if _JPMC_FEED is None:
+        _JPMC_FEED = []
+        base = ("https://jpmc.fa.oraclecloud.com/hcmRestApi/resources/latest/"
+                "recruitingCEJobRequisitions")
+        job = ("https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/"
+               "sites/CX_1001/job/")
+        try:
+            offset = 0
+            for _ in range(45):        # 45 * 200 = 9000, safely above the ~7.3k total
+                finder = ("findReqs;siteNumber=CX_1001,selectedLocationsFacet=,"
+                          f"limit=200,offset={offset},sortBy=POSTING_DATES_DESC")
+                r = requests.get(
+                    base, params={"onlyData": "true",
+                                  "expand": "requisitionList.secondaryLocations",
+                                  "finder": finder},
+                    headers={**HDR, "Accept": "application/json"}, timeout=TIMEOUT * 2)
+                if r.status_code != 200:
+                    break
+                rows = (r.json().get("items") or [{}])[0].get("requisitionList", [])
+                if not rows:
+                    break
+                for j in rows:
+                    jid, nm = j.get("Id"), j.get("Title")
+                    if jid and nm:
+                        _JPMC_FEED.append((nm, f"{job}{jid}"))
+                offset += 200
+        except Exception:
+            pass
+    return _JPMC_FEED
+
+
 ADAPTERS = {"workday": _workday, "radancy": _radancy, "greenhouse": _greenhouse,
-            "lever": _lever, "smartrecruiters": _smartrecruiters, "bofa": _bofa}
+            "lever": _lever, "smartrecruiters": _smartrecruiters, "bofa": _bofa,
+            "jpmc": _jpmc}
 
 # For each portal kind, how to pull the employer's ENTIRE live board.
 #
@@ -332,6 +381,7 @@ ADAPTERS = {"workday": _workday, "radancy": _radancy, "greenhouse": _greenhouse,
 # for them step 1 already IS step 2.
 FULL_FEEDS = {
     "bofa": lambda ref: _bofa(ref, ""),
+    "jpmc": lambda ref: _jpmc(ref, ""),
     "workday": _workday_all,
     "greenhouse": lambda ref: _greenhouse(ref, ""),
     "lever": lambda ref: _lever(ref, ""),
@@ -364,6 +414,7 @@ KNOWN_PORTALS: dict[str, tuple[str, str]] = {
     "cvs health": ("workday",
                    "cvshealth.wd1.myworkdayjobs.com|cvshealth|CVS_Health_Careers"),
     "bofa": ("bofa", "careers.bankofamerica.com"),
+    "jpmorgan": ("jpmc", "jpmc.fa.oraclecloud.com|CX_1001"),
     # Verified by reading their careers pages (see ats_from_careers_page).
     "capital one": ("workday",
                     "capitalone.wd12.myworkdayjobs.com|capitalone|Capital_One"),
@@ -570,11 +621,18 @@ def search_fallback(company: str, title: str) -> str:
 
 def web_fallback(company: str, title: str) -> str:
     """Last resort for a job whose source is a REPOSTER (Lensa/Jooble/…) and
-    whose employer we can't map: a web search for the posting on the employer's
-    own site. Beats sending you to a reposter that may not even accept an
-    application."""
-    q = quote(f'"{title}" {company} careers apply', safe="")
-    return f"https://duckduckgo.com/?q={q}"
+    whose employer we can't map: a web search for the posting.
+
+    We can't reliably scrape a search engine from a script — Google, Bing, DDG
+    and the SearXNG instances all block automated queries. But YOU aren't a
+    script: in your own signed-in browser a search reliably surfaces the real
+    posting ("when I search online I get the right URL"). So the honest fallback
+    is to hand you that exact search, pre-built, on Google — not a reposter that
+    may not even take an application. The title is quoted so Google looks for the
+    specific role, and the employer's own careers site is nudged to the top.
+    """
+    q = quote(f'"{title}" {company} careers apply -site:lensa.com -site:jooble.org', safe="")
+    return f"https://www.google.com/search?q={q}"
 
 
 def resolve_one(company: str, title: str, url: str, portal: tuple[str, str] | None = None) -> str:

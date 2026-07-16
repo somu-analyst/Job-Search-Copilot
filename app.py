@@ -96,13 +96,14 @@ def posted_days_ago(s) -> int | None:
 
 
 def _post_process():
-    from src import score, sponsors, direct_apply
+    from src import score, sponsors, direct_apply, link_check
     score.score_all(conn, verbose=False)
     tags.tag_all(conn, verbose=False)               # skill tags for the queue column
     sponsors.enrich_seeds(conn)
     db.enrich_industries(conn)
     db.backfill_salary(conn)
     direct_apply.resolve_all(conn, verbose=False)   # real employer apply links
+    link_check.audit_all(conn, verbose=False)       # validate + log before you click
     db.archive_stale(conn)
 
 
@@ -116,8 +117,14 @@ def _post_process():
 # Order = what you decide with, left to right:
 #   is it hot -> how well does it fit -> apply -> tailor a resume -> where it
 #   stands -> what it is -> who -> what skills -> where
-JOB_COLS = ["🔥", "score", "apply_url", "tailor", "status",
+JOB_COLS = ["🔥", "score", "apply_url", "link", "tailor", "status",
             "title", "company", "tags", "location"]
+
+# Link-quality badge, straight from the validator (src/link_check.audit_all):
+#   ✓  a real posting we fetched and confirmed reachable
+#   🔍 no exact posting found — the link opens a web search you finish yourself
+# This is the "check if the url is right or wrong" made visible, per row.
+_LINK_BADGE = {"exact": "✓", "weak": "🔍", "dead": "✕", "": "·"}
 
 
 _STATES = {
@@ -191,6 +198,11 @@ def job_columns(extra: dict | None = None) -> dict:
             "Apply", display_text="apply ↗", width="small",
             help="Direct link to the employer's own application page — "
                  "skips third-party reposters."),
+        "link": st.column_config.TextColumn(
+            "✓", width="small",
+            help="Link quality, checked before you click:  ✓ a real posting we "
+                 "verified is reachable  ·  🔍 no exact posting found, so the "
+                 "link runs a web search you finish in your browser."),
         "tailor": st.column_config.CheckboxColumn(
             "📄", width="small",
             help="Tick to send this job to Resume Studio, then open that tab — "
@@ -365,6 +377,7 @@ def job_board(kp: str, default_status=None, height=460):
                   jobs.source AS source, jobs.is_core AS is_core,
                   COALESCE(jobs.salary,'') AS salary,
                   COALESCE(NULLIF(jobs.apply_url,''), jobs.url) AS apply_url,
+                  COALESCE(jobs.apply_kind,'') AS apply_kind,
                   COALESCE(jobs.tags,'') AS tags,
                   jobs.status AS status, jobs.notes AS notes,
                   jobs.date_applied AS date_applied
@@ -412,6 +425,7 @@ def job_board(kp: str, default_status=None, height=460):
                f"🔥 = fit ≥ {MUST_APPLY_AT:.0f}.")
     view = df.copy()
     view["🔥"] = (df["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
+    view["link"] = df["apply_kind"].map(lambda k: _LINK_BADGE.get(k, "·"))
     view["tailor"] = False
     view["location"] = df["location"].map(short_loc)
     view = view[JOB_COLS]
@@ -578,6 +592,7 @@ with t_applied:
     dfa = load("""SELECT rowid, url, title, company, location, score, date_applied,
                          COALESCE(tags,'') tags,
                          COALESCE(NULLIF(apply_url,''), url) apply_url,
+                         COALESCE(apply_kind,'') apply_kind,
                          status, notes
                   FROM jobs
                   WHERE status IN ('applied','responded','interview','offer','rejected')
@@ -591,6 +606,7 @@ with t_applied:
         # the middle: when you applied.
         va = dfa.copy()
         va["🔥"] = (dfa["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
+        va["link"] = dfa["apply_kind"].map(lambda k: _LINK_BADGE.get(k, "·"))
         va["tailor"] = False
         va["location"] = dfa["location"].map(short_loc)
         acols = JOB_COLS + ["date_applied"]
@@ -640,6 +656,7 @@ with t_resume:
                        jobs.source, COALESCE(jobs.salary,'') salary,
                        COALESCE(jobs.description,'') description,
                        COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
+                       COALESCE(jobs.apply_kind,'') apply_kind,
                        COALESCE(jobs.tags,'') tags,
                        COALESCE(companies.industry,'') industry, jobs.status
                 FROM jobs LEFT JOIN companies ON jobs.company = companies.name
@@ -675,6 +692,7 @@ with t_resume:
                    "Headers stay put while you scroll.")
         grid = jp.copy()
         grid["🔥"] = (jp["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
+        grid["link"] = jp["apply_kind"].map(lambda k: _LINK_BADGE.get(k, "·"))
         grid["tailor"] = False
         grid["location"] = jp["location"].map(short_loc)
         # Same column order as every other table. `tailor` is dropped: you are
