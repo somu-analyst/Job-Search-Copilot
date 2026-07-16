@@ -4,3 +4,4 @@ pandas>=2.0
 requests>=2.31
 PyYAML>=6.0
 markdown>=3.5
+ddgs>=6.0            # metasearch (DDG/Bing/Brave) for the web-search apply-link resolver

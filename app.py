@@ -317,10 +317,34 @@ def job_dialog(row: dict):
     else:
         st.info("Full JD isn't published by this source — open the posting to read it.")
 
+    # Weak link → offer a live web search for the employer's real posting. This
+    # is the "search online and get the right URL" you do by hand, run for you:
+    # one query, on demand, so it never trips the rate limit a bulk pass would.
+    if row.get("apply_kind") == "weak":
+        st.caption("🔍 This link runs a web search — no exact posting was found "
+                   "automatically. Try to fetch the employer's real posting now:")
+        if st.button("🔎 Find the exact posting", width='stretch', key="dlg_find"):
+            from src import web_search as ws
+            with st.spinner("Searching the web for the real posting…"):
+                url, outcome = ws.find_posting(row["company"], row["title"])
+            if outcome == "exact":
+                conn.execute("UPDATE jobs SET apply_url=?, apply_kind='exact' "
+                             "WHERE url=?", (url, row["url"]))
+                conn.commit()
+                st.success("Found the employer's posting — updated the Apply link.")
+                st.markdown(f"[✅ Apply here →]({url})")
+            elif url:
+                st.warning("No employer page found, but here's the closest posting:")
+                st.markdown(f"[↗ {url[:70]}…]({url})")
+            else:
+                st.info("Couldn't find a better link — the pre-built Google search "
+                        "in Apply is your best bet.")
+
     a, b, c = st.columns(3)
     with a:
-        st.link_button("✅ Apply on employer site", row["apply_url"],
-                       width='stretch', type="primary")
+        label = "✅ Apply on employer site" if row.get("apply_kind") != "weak" \
+            else "🔍 Search for this job"
+        st.link_button(label, row["apply_url"], width='stretch', type="primary")
     with b:
         st.link_button("↗ Original posting", row["url"], width='stretch')
     with c:
@@ -526,6 +550,7 @@ with t_today:
                           COALESCE(jobs.salary,'') salary,
                           COALESCE(jobs.description,'') description,
                           COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
+                          COALESCE(jobs.apply_kind,'') apply_kind,
                           COALESCE(companies.industry,'') industry,
                           COALESCE(companies.sponsors_h1b,'') sponsor
                    FROM jobs LEFT JOIN companies ON jobs.company = companies.name

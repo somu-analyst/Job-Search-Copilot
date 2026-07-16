@@ -11,7 +11,7 @@ top URLs to career-ops for LLM scoring later.
 """
 import sys
 from src import (db, scrape_boards, scrape_workday, scrape_apis, score, sponsors,
-                 direct_apply, tags, link_check)
+                 direct_apply, tags, link_check, web_search)
 
 
 def main() -> int:
@@ -48,6 +48,8 @@ def main() -> int:
     direct_apply.resolve_all(conn)   # every job gets a real employer apply link
     if "--novalidate" not in args:   # verify each link resolves BEFORE you click it
         link_check.audit_all(conn)
+    if "--websearch" in args:        # upgrade weak links via web search (slow; opt-in)
+        web_search.upgrade_weak_links(conn)
     if "--sponsors" in args:
         sponsors.enrich_live(conn)
     n_stale = db.archive_stale(conn)
