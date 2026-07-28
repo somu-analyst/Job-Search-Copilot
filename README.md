@@ -24,7 +24,11 @@ and the full pipeline, none of which ever leaves your machine.
 
 ### ▶ Full walkthrough video
 
-https://github.com/user-attachments/assets/d7a83f9e-bad2-4197-90e0-f18043a84af8
+
+
+https://github.com/user-attachments/assets/1c5adf4d-4848-4813-adb6-dc2953956f7f
+
+
 
 
 Clicking through all 8 tabs against a live 1,395-job database.
