@@ -24,10 +24,8 @@ and the full pipeline, none of which ever leaves your machine.
 
 ### ▶ Full walkthrough video
 
-<!-- PASTE-VIDEO-HERE: open this file in the GitHub web editor and drag
-     assets/demo.mp4 into this spot. GitHub uploads it to its own asset CDN
-     and replaces this comment with an embed that plays inline, right on
-     this page, like a real video player. Delete this comment once done. -->
+https://github.com/user-attachments/assets/d7a83f9e-bad2-4197-90e0-f18043a84af8
+
 
 Clicking through all 8 tabs against a live 1,395-job database.
 
