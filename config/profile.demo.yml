@@ -1,0 +1,68 @@
+# Demo profile — used ONLY as a fallback when config/profile.yml is absent
+# (e.g. a public deploy or a fresh clone before you've set up your own).
+# Fictional candidate; safe to keep public.
+
+candidate:
+  name: "Alex Rivera"
+  full_name: "Alex Rivera"
+  email: "alex.rivera.demo@example.com"
+  phone: "(555) 010-0100"
+  linkedin: "linkedin.com/in/alexrivera-demo"
+  location: "NJ, USA"
+  visa: "H-1B (needs sponsorship — prioritize sponsor-history employers)"
+  current_employer_line: "Demo Bank Corp — Senior Analyst, Risk & Compliance Analytics (contract)"
+
+narrative:
+  headline: "Senior Fraud & Credit Risk Data Analytics professional — 10+ yrs in Financial Services"
+  exit_story: "A decade across risk-analytics teams at large banks, pairing SAS/Python/SQL domain depth with modern GenAI-accelerated delivery."
+  superpowers:
+    - "Fraud/AML model tuning & alert-accuracy lift"
+    - "Regulatory analytics: CCAR/ICAAP, CECL, PD/LGD/EAD"
+    - "SAS-to-Python migration & production pipelines"
+
+location:
+  search: "United States"
+
+filters:
+  queries:
+    - "fraud analytics"
+    - "AML analytics"
+    - "financial crimes analyst"
+    - "credit risk analytics SAS"
+    - "compliance analytics KYC"
+    - "SAS Viya"
+    - "data governance banking"
+    - "banking analytics consultant"
+
+  positive:
+    [fraud, aml, anti-money, financial crime, bsa, compliance, sanction, kyc,
+     cdd, transaction monitoring, ofac, surveillance, credit risk, risk analy,
+     risk manager, risk report, model risk, model validation, stress test,
+     ccar, cecl, loss forecast, loss mitigation, portfolio risk, portfolio analy,
+     collections, recovery, default, mortgage, servicing, regulatory report,
+     sec report, external report, call center, contact center, quantitative,
+     data analy, analytics, business analyst, business intelligence,
+     decision science, data scientist, sas, reporting, mis, data engineer, etl,
+     consultant, advisory, consulting, data management, data governance,
+     data quality, data steward, master data, metadata, data lineage, insights,
+     data strategy, migration, modernization, remediation,
+     sql, python, tableau, power bi, viya]
+
+  negative:
+    [junior, intern, entry level, ios, android, frontend, front end, php, ruby,
+     embedded, firmware, blockchain, web3, salesforce admin, physical security,
+     nurse, recruiter, driver, warehouse, retail store, cashier,
+     "java ", "java,", javascript, .net, c++, golang, software engineer,
+     software developer, full stack, fullstack, devops, sre]
+
+  core:
+    [fraud, aml, financial crime, credit risk, ccar, cecl, compliance, sas,
+     bsa, kyc, risk analy, stress test]
+
+api_keys:
+  adzuna_app_id: ""
+  adzuna_app_key: ""
+  jooble_key: ""
+
+scrape:
+  board_sites: [indeed, linkedin, google]
