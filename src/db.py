@@ -13,6 +13,17 @@ from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "jobs.db"
+_DEMO_DB = Path(__file__).resolve().parent.parent / "data" / "demo_jobs.db"
+
+
+def display_db_path() -> Path:
+    """What the Streamlit frontend should read. `DB_PATH` (your real,
+    gitignored pipeline) always wins; a fresh clone/cloud deploy with no
+    data/jobs.db yet falls back to the committed sanitized demo DB (public
+    postings only, no resume archive) so the app isn't just empty.
+    The scraper/CLI (run.py) always uses `DB_PATH` directly — it must create
+    your real DB on first run, never write into the demo file."""
+    return DB_PATH if DB_PATH.exists() else _DEMO_DB
 
 STATUSES = ["new", "interested", "applied", "responded",
             "interview", "offer", "rejected", "skip", "stale"]

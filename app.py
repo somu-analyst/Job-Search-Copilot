@@ -63,7 +63,7 @@ STEPS = ["Pick a job", "Fit scores", "AI tailor", "Documents & apply"]
 # ── data plumbing ───────────────────────────────────────────────────────────
 @st.cache_resource
 def _conn():
-    c = sqlite3.connect(db.DB_PATH, check_same_thread=False)
+    c = sqlite3.connect(db.display_db_path(), check_same_thread=False)
     c.row_factory = sqlite3.Row
     db.init(c)
     return c
@@ -536,7 +536,7 @@ with st.sidebar:
             if left <= 5:
                 st.warning("Nearly out — spend the rest on jobs you'll actually apply to.")
 
-    st.caption(f"DB `{db.DB_PATH.name}` · {c['companies']} companies tracked")
+    st.caption(f"DB `{db.display_db_path().name}` · {c['companies']} companies tracked")
 
 # ── Navigation ──────────────────────────────────────────────────────────────
 t_today, t_jobs, t_applied, t_resume, t_arch, t_co, t_h1b, t_ins = st.tabs(

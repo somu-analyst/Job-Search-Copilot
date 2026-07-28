@@ -25,19 +25,25 @@ except ImportError:
 import markdown as _md
 
 _CFG = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
+_DEMO_CFG = Path(__file__).resolve().parent.parent / "config" / "profile.demo.yml"
 _DEFAULT_CO = Path("C:/Users/srini/career-ops/career-ops")
 
 
 def _cfg() -> dict:
-    if yaml and _CFG.exists():
+    # profile.yml is gitignored (your real keywords/keys/candidate info). A
+    # fresh clone/cloud deploy with none falls back to the committed
+    # profile.demo.yml (synthetic candidate) so the app isn't blank.
+    p = _CFG if _CFG.exists() else _DEMO_CFG
+    if yaml and p.exists():
         try:
-            return yaml.safe_load(_CFG.read_text(encoding="utf-8")) or {}
+            return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         except Exception:
             return {}
     return {}
 
 
 _LOCAL_CV = Path(__file__).resolve().parent.parent / "resume" / "cv.md"
+_DEMO_CV = Path(__file__).resolve().parent.parent / "resume" / "cv.demo.md"
 
 
 def careerops_dir() -> Path:
@@ -55,7 +61,10 @@ def cv_path() -> Path:
         return Path(cfg)
     if _LOCAL_CV.exists():
         return _LOCAL_CV
-    return careerops_dir() / "cv.md"
+    co_cv = careerops_dir() / "cv.md"
+    if co_cv.exists():
+        return co_cv
+    return _DEMO_CV
 
 
 def load_cv_md() -> str:
@@ -167,7 +176,7 @@ def cover_letter(job_title: str, company: str) -> str:
     co = load_co_profile()
     cand = co.get("candidate", {})
     narr = co.get("narrative", {})
-    name = cand.get("full_name", "Srinivasa Rao Somu")
+    name = cand.get("full_name", "Your Name")
     powers = narr.get("superpowers", [])[:3]
     bullets = "\n".join(f"  - {p}" for p in powers) if powers else ""
     today = datetime.now().strftime("%B %d, %Y")
@@ -176,16 +185,12 @@ def cover_letter(job_title: str, company: str) -> str:
 Dear {company or 'Hiring'} Team,
 
 I am writing to apply for the {job_title or 'open'} position at {company or 'your organization'}.
-{narr.get('headline', 'Senior Fraud & Credit Risk Data Analytics professional with 13+ years in Financial Services.')}
+{narr.get('headline', 'Add your headline in config/profile.yml (narrative.headline).')}
 
 What I bring to this role:
 {bullets}
 
-My background spans Wells Fargo (AML/fraud compliance analytics), Citi (CCAR/CECL
-stress testing, team leadership), HSBC ($23B sub-prime mortgage portfolio,
-collections and loss-mitigation analytics) and IBM/Dun & Bradstreet (risk data)
-— with deep production experience in SAS, SAS Viya, Python, and SQL, and a track
-record of automating regulatory reporting and cutting false positives.
+{narr.get('exit_story', 'Add your background summary in config/profile.yml (narrative.exit_story).')}
 
 I would welcome the chance to discuss how this experience maps to your team's
 goals. Thank you for your consideration.
@@ -217,7 +222,7 @@ def apply_kit() -> dict:
         "Elevator pitch (about-me box)": (
             narr.get("headline", "") + ". " + narr.get("exit_story", "")
         ).strip(". ") + ".",
-        "Current employer line": "Wells Fargo — Senior Consultant, AML/Fraud Compliance Analytics (06/2023–present, contract)",
+        "Current employer line": cand.get("current_employer_line", ""),
     }
 
 

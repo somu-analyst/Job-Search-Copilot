@@ -15,6 +15,15 @@ capped, so it never dead-ends.
 Not tied to any one industry: the search terms, keywords and employer lists all live in
 `config/profile.yml`.
 
+## 🎮 Live demo
+
+*(Live demo link goes here once deployed — see below.)* Runs on a sanitized demo dataset
+(`config/profile.demo.yml` + `resume/cv.demo.md` + `data/demo_jobs.db`: a fictional
+candidate against 250 real, public job postings) — your own run uses your real resume
+and the full pipeline, none of which ever leaves your machine.
+
+**[▶ Full walkthrough video](assets/demo.mp4)** — clicking through all 8 tabs against a live 1,395-job database.
+
 ## Screenshots
 
 | | |
@@ -25,8 +34,6 @@ Not tied to any one industry: the search terms, keywords and employer lists all 
 | ![Resume Studio](assets/screenshots/04_resume_studio.png) | ![My Resumes](assets/screenshots/05_my_resumes.png) |
 | **🏢 Companies** — employer directory, ATS auto-discovery | **🎫 Sponsors** — H-1B sponsor priority from public disclosure data |
 | ![Companies](assets/screenshots/06_companies.png) | ![Sponsors](assets/screenshots/07_sponsors.png) |
-
-**[▶ Watch the full walkthrough](assets/demo.mp4)** — clicking through all 8 tabs against a live 1,395-job database.
 
 ## Quick start
 
