@@ -143,6 +143,18 @@ resume they're holding.
 4. **Swap the frontend** — the SQLite DB is the API; `ui/` is isolated, so React/Next is
    a drop-in replacement.
 
+## Contributing
+
+MIT-licensed on purpose — fork it, point it at your own industry/keywords, send back
+what you build. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run it, the ground
+rules (no paid AI models, no auto-submit, no LinkedIn scraping), and where the easiest
+high-value contributions are (new Workday tenants, new ATS adapters).
+
+## License
+
+[MIT](LICENSE) — do what you want with it, including forking it for a different
+industry entirely. Attribution appreciated, not required.
+
 ---
 
 <sub>**Credits.** Board scraping runs on [python-jobspy](https://github.com/speedyapply/JobSpy)
