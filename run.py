@@ -4,14 +4,15 @@
     python run.py              # scrape boards + workday, score, enrich, archive
     python run.py --boards     # boards only
     python run.py --workday    # workday only
+    python run.py --gmail      # also pull job-alert digest emails (see src/scrape_gmail.py)
     python run.py --sponsors   # also live-lookup H-1B filings for top companies
 
 Token-free end to end. Every job gets a $0 keyword fit-score; optionally hand
 top URLs to career-ops for LLM scoring later.
 """
 import sys
-from src import (db, scrape_boards, scrape_workday, scrape_apis, score, sponsors,
-                 direct_apply, tags, link_check, web_search)
+from src import (db, scrape_boards, scrape_workday, scrape_apis, scrape_gmail, score,
+                 sponsors, direct_apply, tags, link_check, web_search)
 
 
 def main() -> int:
@@ -34,6 +35,9 @@ def main() -> int:
     if not (only_boards or only_wd):
         print("Aggregator APIs (Adzuna / Jooble):")
         total_new += scrape_apis.run(conn)
+    if "--gmail" in args:   # opt-in: needs one-time Google OAuth setup, see src/scrape_gmail.py
+        print("Gmail (job-alert digests):")
+        total_new += scrape_gmail.run(conn)
 
     print("Post-processing:")
     score.score_all(conn)

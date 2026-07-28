@@ -5,3 +5,7 @@ requests>=2.31
 PyYAML>=6.0
 markdown>=3.5
 ddgs>=6.0            # metasearch (DDG/Bing/Brave) for the web-search apply-link resolver
+beautifulsoup4>=4.12  # parses job cards out of Gmail digest emails (src/scrape_gmail.py)
+google-api-python-client>=2.100   # Gmail lane (opt-in, --gmail)
+google-auth-httplib2>=0.2
+google-auth-oauthlib>=1.2

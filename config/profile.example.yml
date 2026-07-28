@@ -84,3 +84,10 @@ scrape:
   # JobSpy round-robins these. Format: "user:pass@host:port" or "host:port".
   # proxies:
   #   - "user:pass@gate.smartproxy.com:7000"
+
+# Gmail lane (opt-in — python run.py --gmail). Pulls jobs out of job-alert
+# digest emails you already get (LinkedIn/Indeed/ZipRecruiter/Glassdoor/Jooble).
+# One-time setup in src/scrape_gmail.py's docstring; credentials/token files
+# are gitignored, never committed.
+gmail:
+  enabled: true
