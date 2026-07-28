@@ -114,6 +114,17 @@ Every request Srinivas makes + every suggestion Claude proposes, with status.
 | LinkedIn contact scraping | Same ban risk; also performs worse than a hand-sent note |
 | Paid AI models | He said free-only |
 | Resume upload to Dice / HireITPeople | He said don't expose the resume — never happened |
+| beBee | JS-rendered board, no stable API — Playwright-only, fragile for the yield |
+| TheLadders | 403s outright — premium-gated, bot-hostile |
+| JobLeads | Paid subscription product, not a public board — nothing to scrape |
+| tealhq | It's a resume/job-tracker tool (a competitor product), not a jobs source |
+| Selby Jennings | Connection reset on fetch — blocked; boutique agency, tiny job count |
+| talents.vaia | Gen-Z/Europe general board — off-target for the US/BFSI search profile |
+| jobs.georgiafintechacademy | Real (Getro-powered), but its headline employers (FIS, Truist, US Bank) are already covered via the Workday `TENANTS` list — a new lane would mostly re-find jobs already in the DB |
+| jobs.wallstreetfriends | Domain is parked/for-sale on GoDaddy — not a real site |
+| bankdirector.com / bankjobs.com | bankdirector.com's careers page is their own ~3 internal openings, not a banking-industry board; bankjobs.com is password-protected, can't assess without an account |
+
+**Revisit only if:** you get a bankjobs.com login (then re-check what it actually is), or one of the gated sites (JobLeads/TheLadders/beBee) is worth a Playwright build for a specific employer list you care about.
 
 ## Session — 2026-07-12
 

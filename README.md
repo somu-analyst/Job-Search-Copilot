@@ -15,6 +15,19 @@ capped, so it never dead-ends.
 Not tied to any one industry: the search terms, keywords and employer lists all live in
 `config/profile.yml`.
 
+## Screenshots
+
+| | |
+|---|---|
+| **🎯 Today** — highest-fit picks, apply straight to the employer's own portal | **📋 Jobs** — every job found, filter/sort/status inline |
+| ![Today](assets/screenshots/01_today.png) | ![Jobs](assets/screenshots/02_jobs.png) |
+| **📄 Resume Studio** — pick a job, score fit, AI-tailor, generate docs | **🗂 My Resumes** — every version archived, timestamped, tied to its job |
+| ![Resume Studio](assets/screenshots/04_resume_studio.png) | ![My Resumes](assets/screenshots/05_my_resumes.png) |
+| **🏢 Companies** — employer directory, ATS auto-discovery | **🎫 Sponsors** — H-1B sponsor priority from public disclosure data |
+| ![Companies](assets/screenshots/06_companies.png) | ![Sponsors](assets/screenshots/07_sponsors.png) |
+
+**[▶ Watch the full walkthrough](assets/demo.webm)** — clicking through all 8 tabs against a live 1,395-job database.
+
 ## Quick start
 
 ```bash
