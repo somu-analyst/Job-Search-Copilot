@@ -74,10 +74,10 @@ never get committed.
   Workday JSON APIs    ─┼──────► dedupe on URL              ─────►│  data/jobs.db  │
   (direct, unblockable) │        fit-score 1–10                   │  jobs          │
                         │        H-1B sponsor tag                 │  companies     │
-  Adzuna / Jooble APIs ─┘        salary (FYI)                     │  resumes       │
-                                 resolve REAL apply link          └────────┬───────┘
-                                                                           ▼
-                                                              Streamlit app (app.py)
+  Adzuna / Jooble APIs ─┤        salary (FYI)                     │  resumes       │
+                        │        resolve REAL apply link          └────────┬───────┘
+  Gmail job-alert       │                                                  ▼
+  digests (opt-in)    ──┘                                    Streamlit app (app.py)
 ```
 
 ## What makes it different
@@ -112,13 +112,14 @@ resume they're holding.
 
 | Path | What it is |
 |------|-----------|
-| `run.py` | Orchestrator. `--boards` / `--workday` to run one lane; `--sponsors` adds live H-1B lookups. Every run scores, tags sponsors, backfills salary, resolves apply links, archives stale jobs. |
+| `run.py` | Orchestrator. `--boards` / `--workday` to run one lane, `--gmail` adds the Gmail lane; `--sponsors` adds live H-1B lookups. Every run scores, tags sponsors, backfills salary, resolves apply links, archives stale jobs. |
 | `app.py` | Streamlit frontend. Presentation only — no business logic. |
 | `ui/` | Design system + reusable components. Imports nothing from `src/`, so the frontend is swappable. |
 | `src/db.py` | SQLite schema: `jobs` (with your `status` tracker), `companies` (auto-growing directory), `resumes` (the archive). |
 | `src/scrape_boards.py` | JobSpy multi-board scraper (proxy-ready). |
 | `src/scrape_workday.py` | Workday JSON feeder. Add employers to `TENANTS`; `python -m src.scrape_workday --probe <host> <tenant>` finds the site slug. |
 | `src/scrape_apis.py` | Adzuna + Jooble (free keys). |
+| `src/scrape_gmail.py` | Opt-in Gmail lane — parses job-alert digest emails (LinkedIn/Indeed/ZipRecruiter/Glassdoor/Jooble) into real jobs. One-time Google OAuth setup, see its docstring. `python -m src.scrape_gmail --probe` counts matches without inserting. |
 | `src/direct_apply.py` | The apply-link resolver + ATS discovery. |
 | `src/score.py` | Token-free fit score, 1–10. |
 | `src/jd_match.py` | JD-vs-resume scoring, sponsorship/location screening. |

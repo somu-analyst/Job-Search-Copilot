@@ -23,7 +23,7 @@ back to those same demo files automatically — so you can poke at the UI immedi
 
 ## Ground rules
 
-- **`config/profile.yml`, `resume/cv.md`, `data/*.db` are gitignored on purpose.** They
+- **`config/profile.yml`, `resume/cv.md`, `data/*.db`, `config/gmail_credentials.json`, `config/gmail_token.json` are gitignored on purpose.** They
   hold a real person's keywords, resume, and job pipeline. Never force-add or PR a
   change that would commit real personal data. If you're adding a new demo/fallback
   path, sanitize it the way `data/demo_jobs.db` is sanitized (see `src/db.py`'s

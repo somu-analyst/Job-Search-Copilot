@@ -22,6 +22,8 @@ Thumbs.db
 .env
 config/secrets.yml
 config/profile.yml
+config/gmail_credentials.json
+config/gmail_token.json
 
 # Personal resume (users keep their own; sample shipped as cv.example.md)
 resume/cv.md

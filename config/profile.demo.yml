@@ -66,3 +66,6 @@ api_keys:
 
 scrape:
   board_sites: [indeed, linkedin, google]
+
+gmail:
+  enabled: false   # demo profile — no mailbox to read
