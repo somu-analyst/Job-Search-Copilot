@@ -26,7 +26,7 @@ Not tied to any one industry: the search terms, keywords and employer lists all 
 | **🏢 Companies** — employer directory, ATS auto-discovery | **🎫 Sponsors** — H-1B sponsor priority from public disclosure data |
 | ![Companies](assets/screenshots/06_companies.png) | ![Sponsors](assets/screenshots/07_sponsors.png) |
 
-**[▶ Watch the full walkthrough](assets/demo.webm)** — clicking through all 8 tabs against a live 1,395-job database.
+**[▶ Watch the full walkthrough](assets/demo.mp4)** — clicking through all 8 tabs against a live 1,395-job database.
 
 ## Quick start
 
