@@ -22,7 +22,14 @@ Not tied to any one industry: the search terms, keywords and employer lists all 
 candidate against 250 real, public job postings) — your own run uses your real resume
 and the full pipeline, none of which ever leaves your machine.
 
-**[▶ Full walkthrough video](assets/demo.mp4)** — clicking through all 8 tabs against a live 1,395-job database.
+### ▶ Full walkthrough video
+
+<!-- PASTE-VIDEO-HERE: open this file in the GitHub web editor and drag
+     assets/demo.mp4 into this spot. GitHub uploads it to its own asset CDN
+     and replaces this comment with an embed that plays inline, right on
+     this page, like a real video player. Delete this comment once done. -->
+
+Clicking through all 8 tabs against a live 1,395-job database.
 
 ## Screenshots
 
