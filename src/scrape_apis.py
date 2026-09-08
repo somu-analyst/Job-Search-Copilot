@@ -116,7 +116,10 @@ def _jooble(conn, key, verbose=True) -> int:
 #   openwebninja            X-API-Key        app.openwebninja.com
 _JS_HOST = "jsearch.p.rapidapi.com"
 _JS_ENDPOINTS = {
-    "rapidapi":     (f"https://{_JS_HOST}/search",
+    # the old /search 404s now ("Endpoint '/search' does not exist"); the live
+    # search path is /search-v2 on both vendors. Response is {"data": {"jobs": [...]}}
+    # — _js_rows() already accepts that shape.
+    "rapidapi":     (f"https://{_JS_HOST}/search-v2",
                      {"X-RapidAPI-Key": "{k}", "X-RapidAPI-Host": _JS_HOST}),
     "openwebninja": ("https://api.openwebninja.com/jsearch/search-v2",
                      {"X-API-Key": "{k}"}),
