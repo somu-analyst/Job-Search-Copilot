@@ -6,16 +6,16 @@ candidate:
   email: "you@example.com"
   phone: "(555) 555-5555"
   linkedin: "linkedin.com/in/you"
-  location: "NJ, USA"
-  visa: "H-1B (needs sponsorship — prioritize sponsor-history employers)"
+  location: "City, ST"
+  visa: "e.g. citizen / GC / H-1B (needs sponsorship)"
 
 narrative:
-  headline: "Senior Fraud & Credit Risk Data Analytics leader — 13+ yrs across Wells Fargo, Citi, HSBC, IBM"
-  exit_story: "13+ years up the risk-analytics stack in tier-1 banks, now pairing deep SAS/Viya/Python/SQL domain depth with GenAI-accelerated delivery."
+  headline: "Your headline — seniority, domain, years, and (optionally) marquee employers"
+  exit_story: "2-3 sentences: what you've done, your core stack, and where you're headed."
   superpowers:
-    - "Fraud/AML model remediation & alert-accuracy tuning (12% lift, 300+ escalations/mo)"
-    - "Regulatory analytics: CCAR/ICAAP, CECL, PD/LGD/EAD — led a team of 4 at Citi"
-    - "SAS-to-Viya migration & production pipelines (~80% faster runtimes, 40% ETL cut)"
+    - "Achievement 1 with a number (what you did, quantified result)"
+    - "Achievement 2 with a number"
+    - "Achievement 3 with a number"
 
 location:
   search: "United States"      # location string passed to the board scrapers
@@ -76,10 +76,22 @@ filters:
 api_keys:
   adzuna_app_id: ""
   adzuna_app_key: ""
-  jooble_key: ""   # 500-request default limit
+  jooble_key: ""    # 500-request default limit
+  jsearch_key: ""   # free tier ~200 requests/MONTH — see scrape.jsearch_requests
+  jsearch_via: rapidapi   # where you bought the key. Same vendor, different auth:
+                          #   rapidapi     rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
+                          #   openwebninja app.openwebninja.com  (vendor-direct)
 
 scrape:
   board_sites: [indeed, linkedin, google]   # ziprecruiter/glassdoor block scrapers
+  jsearch_requests: 3     # JSearch calls per run (1 query each). Free tier is ~200/month,
+                          # i.e. ~3 per run at two runs a day. Raise it on a paid plan.
+  cascade_min: 5          # stop calling metered APIs once a run has found this many new
+                          # jobs (Adzuna runs first, then Jooble, then JSearch). 0 = always
+                          # run every source.
+  smart_queries: false    # true = the model writes the search terms from your resume each
+                          # run instead of using filters.queries (same as --smart-queries).
+                          # Falls back to the static list whenever the LLM lane is down.
   # Optional: add proxies to re-enable blocked sites & dodge LinkedIn rate limits.
   # JobSpy round-robins these. Format: "user:pass@host:port" or "host:port".
   # proxies:

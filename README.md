@@ -74,7 +74,8 @@ never get committed.
   Workday JSON APIs    ─┼──────► dedupe on URL              ─────►│  data/jobs.db  │
   (direct, unblockable) │        fit-score 1–10                   │  jobs          │
                         │        H-1B sponsor tag                 │  companies     │
-  Adzuna / Jooble APIs ─┤        salary (FYI)                     │  resumes       │
+  Adzuna / Jooble /    ─┤        salary (FYI)                     │  resumes       │
+  JSearch APIs          │
                         │        resolve REAL apply link          └────────┬───────┘
   Gmail job-alert       │                                                  ▼
   digests (opt-in)    ──┘                                    Streamlit app (app.py)
@@ -85,7 +86,7 @@ never get committed.
 **Direct apply links.** Aggregators bounce you through third-party reposters that often
 can't even take an application. `src/direct_apply.py` resolves a real employer link
 for **every** job, in four tiers: already-an-ATS → query the employer's own portal API
-(Workday / Greenhouse / Lever / SmartRecruiters / Radancy) → deep-link into their careers
+(Workday / Greenhouse / Lever / Ashby / SmartRecruiters / Radancy) → deep-link into their careers
 search → their careers page. It discovers each employer's ATS once and remembers it, so
 the company directory gets smarter every scan.
 
@@ -100,9 +101,27 @@ each one against that JD from three angles — ATS keyword coverage, recruiter s
 hiring-manager depth. You *see* what a stronger reframe buys you in points and what it
 costs in authenticity, instead of guessing at a slider.
 
-**An authenticity guard.** Every tailored version is checked against your base resume for
-skills it doesn't support, numbers it never had, and hype it added. Over-claiming fails
-interviews and background checks; this catches it before you send.
+**An authenticity guard, in two layers.** Every tailored version is checked against your
+base resume for skills it doesn't support, numbers it never had, and hype it added. But
+the costlier failure is subtler: a summary can recombine *real* material — pairing a tool
+from one employer with a metric from another — and pass any vocabulary check, because
+every word is genuinely yours. `src/grounding.py` grades each factual sentence on how
+much of its substance a *single* resume fact accounts for (numbers weighted 3x, since a
+wrong metric is the most checkable claim you can make). Nothing covers it → flagged. Two
+facts together cover it → it asks you to confirm the pairing rather than accusing you,
+because no string match can tell an honest merge from a false one.
+
+That last ambiguity is why `src/corpus.py` exists. Your resume is parsed into numbered
+facts (`[cv-bullet-004] Led a team of 4 building the credit-risk models…`), and the
+tailoring model selects from those and names the ones behind each sentence. Checking a
+claim then stops being a search and becomes a lookup — which makes three sharper failures
+visible: a cited fact that doesn't exist (the tell of a claim invented first and sourced
+afterwards), a claim its own cited facts don't cover, and **attribution drift** — a
+sentence naming an employer that none of its cited facts belong to. On a resume where the
+same tooling recurs at four banks, that last one is the failure worth catching, and no
+amount of text similarity finds it. All of it is $0 with no extra LLM call, and each
+variant gets a fabrication rate you can compare. Over-claiming fails interviews and
+background checks; this catches it before you send.
 
 **A resume archive.** Every version you generate or edit is stored with a timestamp and
 the job it was for. Six months later, when a recruiter calls, you can pull up the exact
@@ -112,18 +131,21 @@ resume they're holding.
 
 | Path | What it is |
 |------|-----------|
-| `run.py` | Orchestrator. `--boards` / `--workday` to run one lane, `--gmail` adds the Gmail lane; `--sponsors` adds live H-1B lookups. Every run scores, tags sponsors, backfills salary, resolves apply links, archives stale jobs. |
+| `run.py` | Orchestrator. `--boards` / `--workday` to run one lane, `--gmail` adds the Gmail lane; `--sponsors` adds live H-1B lookups; `--smart-queries` has the model write the search terms from your resume. Every run scores, tags sponsors, backfills salary, resolves apply links, archives stale jobs. |
 | `app.py` | Streamlit frontend. Presentation only — no business logic. |
 | `ui/` | Design system + reusable components. Imports nothing from `src/`, so the frontend is swappable. |
 | `src/db.py` | SQLite schema: `jobs` (with your `status` tracker), `companies` (auto-growing directory), `resumes` (the archive). |
 | `src/scrape_boards.py` | JobSpy multi-board scraper (proxy-ready). |
 | `src/scrape_workday.py` | Workday JSON feeder. Add employers to `TENANTS`; `python -m src.scrape_workday --probe <host> <tenant>` finds the site slug. |
-| `src/scrape_apis.py` | Adzuna + Jooble (free keys). |
+| `src/scrape_apis.py` | Adzuna + Jooble + JSearch (free keys). JSearch fronts Google for Jobs and returns the employer's own apply link pre-labelled `is_direct`, which skips the resolver. Its free tier is ~150 requests/month, so it splits the lane-ordered query list into 3 OR-groups and runs **one group per call**, rotating by an AM/PM bucket (full cycle every 3 runs ≈ 1.5 days). `scrape.jsearch_requests` = groups covered per run (default 1 ≈ 62/month). |
 | `src/scrape_gmail.py` | Opt-in Gmail lane — parses job-alert digest emails (LinkedIn/Indeed/ZipRecruiter/Glassdoor/Jooble) into real jobs. One-time Google OAuth setup, see its docstring. `python -m src.scrape_gmail --probe` counts matches without inserting. |
 | `src/direct_apply.py` | The apply-link resolver + ATS discovery. |
 | `src/score.py` | Token-free fit score, 1–10. |
 | `src/jd_match.py` | JD-vs-resume scoring, sponsorship/location screening. |
-| `src/ai.py` | Free-model layer (OpenRouter → Gemini → offline). Includes the authenticity check. |
+| `src/ai.py` | Free-model layer (OpenRouter → Gemini → offline). Includes the authenticity check (catches *new* material: invented skills, numbers, hype). |
+| `src/corpus.py` | Your resume parsed into addressable facts (`cv-bullet-004`, `cv-skill-011`), each carrying the employer from its section heading. The tailoring model picks from these and cites what it used. |
+| `src/grounding.py` | Deterministic grounding check, no LLM call — catches *recombination*, where every word is real but the sentence welds two different roles together. Gives each variant a fabrication rate. |
+| `tests/` | `python -m pytest tests/ -q`. Offline — every network and LLM call is stubbed, so the suite runs in under a second. |
 | `src/variants.py` | Builds and scores the resume versions. |
 | `src/resume_store.py` | The resume archive. |
 | `src/outreach.py` | Recruiter contact discovery + a `mailto:` draft you review and send. |

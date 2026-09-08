@@ -62,7 +62,7 @@ Every request the user makes + every suggestion Claude proposes, with status.
 |---|-----|--------|
 | D1 | Citizens opened Lensa, not the real portal | ✅ direct link found (Citizens = Radancy) |
 | D2 | Do it for ALL jobs, automatically | ✅ **1,395/1,395 (100%), 0 reposters** |
-| D3 | Auto-discover each employer's ATS into the directory | ✅ Workday/Greenhouse/Lever/SmartRecruiters/Radancy |
+| D3 | Auto-discover each employer's ATS into the directory | ✅ Workday/Greenhouse/Lever/Ashby/SmartRecruiters/Radancy |
 
 ## E. Outreach
 
@@ -171,7 +171,7 @@ Fixes, all at the adapter layer so they apply to every employer:
   the MATCH.
 - **Full board = the authority.** Keyword search can't prove a negative. Every
   portal kind now has a full-board puller (Workday paged, BoA, Greenhouse,
-  Lever). Search first (cheap); if it misses, pull the whole board. On it → exact
+  Lever, Ashby). Search first (cheap); if it misses, pull the whole board. On it → exact
   link. Not on it → the posting is **closed**, so retire it instead of faking a link.
 
 Two bugs caught only because I checked the numbers instead of trusting them:

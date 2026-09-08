@@ -6,13 +6,14 @@
     python run.py --workday    # workday only
     python run.py --gmail      # also pull job-alert digest emails (see src/scrape_gmail.py)
     python run.py --sponsors   # also live-lookup H-1B filings for top companies
+    python run.py --smart-queries  # let the model write the search terms from your resume
 
 Token-free end to end. Every job gets a $0 keyword fit-score; optionally hand
 top URLs to career-ops for LLM scoring later.
 """
 import sys
 from src import (db, scrape_boards, scrape_workday, scrape_apis, scrape_gmail, score,
-                 sponsors, direct_apply, tags, link_check, web_search)
+                 sources, sponsors, direct_apply, tags, link_check, web_search)
 
 
 def main() -> int:
@@ -25,6 +26,10 @@ def main() -> int:
     before = db.counts(conn)
 
     print(f"[{db.now()}] bfsi-job-hunter — scanning...")
+    # Must happen before any scraper runs — they all read sources.QUERIES.
+    if ("--smart-queries" in args
+            or (scrape_apis._cfg().get("scrape", {}) or {}).get("smart_queries")):
+        sources.smart_queries()
     total_new = 0
     if not only_wd:
         print("Boards (Indeed / LinkedIn / Google):")
@@ -33,7 +38,7 @@ def main() -> int:
         print("Workday JSON API (banks):")
         total_new += scrape_workday.run(conn)
     if not (only_boards or only_wd):
-        print("Aggregator APIs (Adzuna / Jooble):")
+        print("Aggregator APIs (Adzuna / Jooble / JSearch):")
         total_new += scrape_apis.run(conn)
     if "--gmail" in args:   # opt-in: needs one-time Google OAuth setup, see src/scrape_gmail.py
         print("Gmail (job-alert digests):")

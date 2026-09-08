@@ -225,6 +225,24 @@ hr{margin:14px 0;border-color:var(--line);}
 .empty .h{font-size:16px;font-weight:700;color:var(--ink);margin-top:8px;}
 .empty .s{font-size:13.5px;color:var(--muted);margin-top:4px;}
 
+/* ── Grounding badge + citation trail ───────────────────────── */
+.ground{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:650;
+  padding:5px 9px;border-radius:var(--r-sm);border:1px solid var(--line);
+  background:var(--sf);color:var(--muted);margin:2px 0 6px;}
+.ground.ok{background:#ECFDF5;border-color:#A7F3D0;color:#065F46;}
+.ground.warn{background:#FFFBEB;border-color:#FDE68A;color:#92400E;}
+.ground.bad{background:#FEF2F2;border-color:#FECACA;color:#991B1B;}
+.ground .cite{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;padding:1px 6px;border-radius:999px;
+  background:rgba(0,0,0,.06);}
+.claim{font-size:14px;font-weight:600;color:var(--ink);margin:10px 0 4px;
+  padding-left:9px;border-left:3px solid var(--p);}
+.src{font-size:12.5px;color:var(--muted);margin:2px 0 2px 12px;line-height:1.5;}
+.src .fid{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+  color:var(--p-dk);background:var(--p-sf);border:1px solid var(--p-bd);
+  border-radius:4px;padding:1px 5px;margin-right:6px;}
+.src.none{color:#B91C1C;font-style:italic;}
+
 /* ── Step rail ──────────────────────────────────────────────── */
 .rail{display:flex;align-items:stretch;gap:2px;margin:2px 0 12px;}
 .rail .s{flex:1;text-align:center;border-radius:var(--r-sm);padding:11px 8px;

@@ -839,6 +839,12 @@ with t_resume:
                     st.metric("Overall", f"{sc['overall']}/10", delta=d)
                     st.caption(f"ATS {sc['ats']} · Rec {sc['recruiter']} · "
                                f"HM {sc['hiring_manager']}")
+                    if v["mode"] != "base":
+                        # A higher ATS score is worthless if it was bought with
+                        # claims you can't defend — show both side by side.
+                        ui.grounding_badge(v.get("fabrication_rate", 0.0),
+                                           cited=bool(v.get("citations")),
+                                           checked=v.get("claims_checked", 0))
                     if v["warnings"]:
                         # A bare count is useless — you can't act on "1 flag".
                         # Click through to see exactly which claim is the problem.
@@ -867,6 +873,20 @@ with t_resume:
                     st.write("- " + w)
                 st.caption("Over-claiming fails interviews and background checks. "
                            "Edit it below or drop to a gentler version.")
+
+            if chosen["mode"] != "base":
+                with st.expander("🔗 Where each claim comes from"):
+                    from src import corpus as cx
+                    cv = cx.build(vs[0]["resume_md"])
+                    rows = []
+                    for s in (chosen.get("citations") or []):
+                        facts = []
+                        for rid in s.get("refs", []):
+                            it = cv.get(rid)
+                            facts.append((rid, it.text if it else
+                                          "⚠ no such fact in your resume"))
+                        rows.append((s.get("text", ""), facts))
+                    ui.citation_list(rows)
 
             # ── User edits the summary, then re-scores ──
             st.markdown("**✏️ Edit before you send** — your words always win.")

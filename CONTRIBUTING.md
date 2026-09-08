@@ -49,6 +49,10 @@ shared logic, and are easy to verify (the module has a `--probe` CLI for exactly
 
 ## Before opening a PR
 
+- Run the tests: `pip install -r requirements-dev.txt && python -m pytest tests/ -q`.
+  They stub every network and LLM call, so the suite is offline and takes under a
+  second — if a run suddenly takes a minute, something escaped its stub and is
+  calling a real API.
 - Run `python run.py --workday` (or whichever lane you touched) against real data and
   confirm it doesn't error.
 - If you touched `app.py`/`ui/`, actually open the Streamlit app and click through the

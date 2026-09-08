@@ -78,6 +78,47 @@ def _load():
 QUERIES, POSITIVE, NEGATIVE, CORE = _load()
 
 
+def smart_queries(n: int = 10, verbose: bool = True) -> list[str]:
+    """Let the model write the search terms, from your resume instead of a list.
+
+    The static `queries:` list is a snapshot of how you described yourself the
+    day you wrote it — it can't know that a JD calls the thing you do
+    "transaction monitoring optimisation". This asks the free LLM lane for the
+    terms a recruiter would actually index, seeded by your own resume.
+
+    Replaces QUERIES **in place** so every scraper that did
+    `from .sources import QUERIES` sees the new terms. Returns [] and changes
+    nothing if the model is unavailable — the static list must keep working.
+    """
+    try:
+        from . import ai, resume as rz
+        cv = (rz.load_cv_md() or "")[:4000]
+        if not cv.strip():
+            return []
+        prompt = (
+            "You are a technical recruiter. Read this resume and write the "
+            f"{n} job-board search phrases most likely to surface roles this "
+            "person can actually get. Use the vocabulary employers put in job "
+            "TITLES, not resume prose. 2-5 words each, no boolean operators, "
+            "no location.\n\nExisting terms (improve on these, don't repeat "
+            f"them all): {', '.join(QUERIES[:8])}\n\nRESUME:\n{cv}\n\n"
+            'Reply with JSON only: {"queries": ["...", "..."]}')
+        got = ai._json_block(ai._chat(prompt, max_tokens=500)).get("queries") or []
+        fresh = [str(q).strip() for q in got
+                 if str(q).strip() and 2 <= len(str(q).split()) <= 6][:n]
+        if len(fresh) < 3:          # a stub answer is worse than the static list
+            return []
+        QUERIES[:] = fresh
+        if verbose:
+            print(f"  smart queries: {', '.join(fresh)}")
+        return fresh
+    except Exception as e:
+        if verbose:
+            print(f"  [warn] smart queries unavailable ({type(e).__name__}) — "
+                  "using the configured list")
+        return []
+
+
 def title_ok(title: str) -> bool:
     t = (title or "").lower()
     return any(p in t for p in POSITIVE) and not any(n in t for n in NEGATIVE)

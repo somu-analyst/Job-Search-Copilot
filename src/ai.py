@@ -328,6 +328,64 @@ RESUME:
     return out.strip() if len(out) < 1500 else out[:1500]
 
 
+def tailor_summary_cited(url: str, title: str, company: str, level: str = "Balanced",
+                         intensity: int = 5, emphasize: list | None = None,
+                         cv_corpus=None) -> tuple[str, list[dict]]:
+    """Same as `tailor_summary`, but the model picks from numbered resume facts
+    and must name the ones behind each sentence.
+
+    Returns (summary, [{"text": ..., "refs": ["cv-bullet-004", ...]}, ...]).
+    A citation turns validation from "does any of 67 facts resemble this?" into
+    "does THIS fact support it?" — which is the only way to catch a claim that
+    is built from real material but attributes it to the wrong employer.
+
+    Returns ("", []) on failure so callers can fall back to `tailor_summary`.
+    """
+    from . import corpus as cx
+    cv = cv_corpus or cx.build_from_resume()
+    if not cv.items:
+        return "", []
+    jd = fetch_jd(url) or f"(Job title: {title} at {company})"
+    style = _LEVELS.get(level, _LEVELS["Balanced"])
+    emph = ""
+    if emphasize:
+        emph = ("\nThe candidate CONFIRMS real experience with: " + ", ".join(emphasize)
+                + ". Prefer facts covering these where they exist; if no fact "
+                "supports one, leave it out rather than fabricate.")
+    prompt = f"""Write a Professional Summary for the job below, using ONLY the
+numbered resume facts. Tailoring intensity: {intensity}/10 ({level}). {style}{emph}
+
+Rules:
+- Every sentence must be supported by the facts you cite for it. Do not merge
+  facts from two different employers into one claim.
+- Never state a number, employer, title or tool that is not in a cited fact.
+- 3-4 sentences, plain text, no hype words (expert, world-class, guru, 10x).
+
+Respond with ONLY this JSON:
+{{"sentences": [{{"text": "<one sentence>", "refs": ["cv-bullet-003", "cv-skill-011"]}}]}}
+
+JOB ({title} at {company}):
+{jd[:4000]}
+
+RESUME FACTS:
+{cv.render_for_prompt()}"""
+    data = _json_block(_chat(prompt, max_tokens=700))
+    sents = []
+    for s in (data.get("sentences") or []):
+        if not isinstance(s, dict):
+            continue
+        text = str(s.get("text", "")).strip()
+        if not text:
+            continue
+        refs = [str(r).strip().strip("[]").lower()
+                for r in (s.get("refs") or []) if str(r).strip()]
+        sents.append({"text": text, "refs": refs})
+    if not sents:
+        return "", []
+    summary = " ".join(s["text"] for s in sents)
+    return (summary[:1500], sents)
+
+
 def authenticity_check(tailored_summary: str, base_resume: str = "") -> list[str]:
     """Guard against over-claiming: flag skills/numbers/hype in the tailored
     summary that are NOT supported by the base resume. Empty list = clean."""
@@ -348,6 +406,16 @@ def authenticity_check(tailored_summary: str, base_resume: str = "") -> list[str
     # sailed straight through when we only checked the known vocabulary.
     _STOP = {"i", "a", "the", "and", "or", "of", "in", "for", "with", "to", "at",
              "on", "as", "by", "an", "my"}
+    # the candidate's own name tokens are never invented claims — read them from
+    # the (gitignored) profile so this generalises instead of hardcoding a name
+    try:
+        import yaml as _yaml
+        _cfgp = Path(__file__).resolve().parent.parent / "config" / "profile.yml"
+        _cand = (_yaml.safe_load(_cfgp.read_text(encoding="utf-8")) or {}).get("candidate", {})
+        _STOP |= {w.lower() for v in (_cand.get("name"), _cand.get("full_name"))
+                  if v for w in str(v).split()}
+    except Exception:
+        pass
     proper = re.findall(r"\b(?:[A-Z]{2,}|[A-Z][a-zA-Z0-9+.#/-]{2,})\b",
                         tailored_summary or "")
     # drop the first word of each sentence — capitalisation there means nothing

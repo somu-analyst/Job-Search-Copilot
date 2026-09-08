@@ -131,6 +131,45 @@ def section(title: str, sub: str = "") -> None:
         st.caption(sub)
 
 
+# ── Grounding (resume authenticity) ─────────────────────────────────────────
+def grounding_badge(rate: float, cited: bool = False, checked: int = 0) -> None:
+    """One line on a resume version: how much of it traces back to your resume.
+
+    Shown as GROUNDED, not as a fabrication rate — the number people act on is
+    'how much of this can I defend', and a 0%-is-good metric reads backwards at
+    a glance. `cited` marks the stronger check: the model named its sources, so
+    the claim was verified against the fact it meant, not the closest match."""
+    pct = max(0.0, min(1.0, 1.0 - float(rate or 0.0)))
+    tone = "ok" if pct >= 0.999 else ("warn" if pct >= 0.75 else "bad")
+    mark = {"ok": "🔗", "warn": "⚠️", "bad": "⛔"}[tone]
+    detail = f" of {checked} claim{'s' if checked != 1 else ''}" if checked else ""
+    st.markdown(
+        f"<div class='ground {tone}'>{mark} Grounded {pct:.0%}{_esc(detail)}"
+        + ("<span class='cite'>cited</span>" if cited else "")
+        + "</div>", unsafe_allow_html=True)
+
+
+def citation_list(rows: list[tuple[str, list[tuple[str, str]]]]) -> None:
+    """Sentence-by-sentence provenance: each claim above the resume facts it
+    was built from. This is what makes the check reviewable instead of
+    something you either trust or ignore — you can see the actual line."""
+    if not rows:
+        st.caption("This version has no citations — it was written without the "
+                   "cited path, so claims were matched by similarity instead.")
+        return
+    for sentence, facts in rows:
+        st.markdown(f"<div class='claim'>{_esc(sentence)}</div>",
+                    unsafe_allow_html=True)
+        if not facts:
+            st.markdown("<div class='src none'>no source cited</div>",
+                        unsafe_allow_html=True)
+            continue
+        for fid, text in facts:
+            st.markdown(
+                f"<div class='src'><span class='fid'>{_esc(fid)}</span>"
+                f"{_esc(text)}</div>", unsafe_allow_html=True)
+
+
 # ── Step rail ───────────────────────────────────────────────────────────────
 def step_rail(steps: list[str], active: int) -> None:
     """1 → 2 → 3 → 4 progress rail. `active` is 1-indexed; earlier steps read

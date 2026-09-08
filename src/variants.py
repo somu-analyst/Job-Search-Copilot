@@ -10,7 +10,7 @@ exactly which resume went to which employer.
 from __future__ import annotations
 import re
 
-from . import ai, jd_match, resume as rz
+from . import ai, corpus as cx, grounding, jd_match, resume as rz
 
 # (label, intensity, what it's for)
 PRESETS = [
@@ -42,6 +42,8 @@ def build(job_url: str, job_title: str, company: str, *,
     this never dead-ends.
     """
     base_md = rz.load_cv_md()
+    refs = grounding.references(base_md)   # parsed once, reused by every variant
+    cv = cx.build(base_md)                 # same, for the cited path
     out = [{
         "label": "Master (untouched)",
         "blurb": "Your base resume, no tailoring. The baseline everything is measured against.",
@@ -49,28 +51,46 @@ def build(job_url: str, job_title: str, company: str, *,
         "resume_md": base_md,
         "scores": score_resume(job_url, job_title, base_md, jd_override),
         "warnings": [],
+        "fabrication_rate": 0.0,   # by definition — it IS the ground truth
         "mode": "base",
     }]
 
     for label, intensity, blurb in (presets or PRESETS):
         band = ("Conservative" if intensity <= 3 else
                 "Balanced" if intensity <= 7 else "Aggressive")
-        s = ai.tailor_summary(job_url, job_title, company, band,
-                              intensity=intensity, emphasize=emphasize or [])
-        mode = "AI"
+        # Preferred path: the model cites which resume facts it used, so the
+        # check grades the pairing it intended instead of guessing at one.
+        s, cited = ai.tailor_summary_cited(job_url, job_title, company, band,
+                                           intensity=intensity,
+                                           emphasize=emphasize or [], cv_corpus=cv)
+        mode = "AI+cited"
         if not s:
-            s = ai.tailor_summary_offline(job_url, job_title, company)
+            s, cited = ai.tailor_summary(job_url, job_title, company, band,
+                                         intensity=intensity,
+                                         emphasize=emphasize or []), []
+            mode = "AI"
+        if not s:
+            s, cited = ai.tailor_summary_offline(job_url, job_title, company), []
             mode = "offline"
         if not s:
             continue
         md = _swap_summary(base_md, s)
+        # Two guards, different failure modes: authenticity_check catches NEW
+        # material (invented skills/numbers/hype), grounding catches claims
+        # recombined out of real material — precisely when citations exist,
+        # by best-match search when they don't.
+        rep = (grounding.check_cited(cited, cv) if cited
+               else grounding.check(s, base_md, refs=refs))
         out.append({
             "label": label,
             "blurb": blurb,
             "summary": s,
             "resume_md": md,
             "scores": score_resume(job_url, job_title, md, jd_override),
-            "warnings": ai.authenticity_check(s, base_md),
+            "warnings": ai.authenticity_check(s, base_md) + rep.warnings(),
+            "fabrication_rate": rep.rate,
+            "claims_checked": rep.checked,
+            "citations": cited,
             "mode": mode,
         })
     return out
@@ -81,8 +101,10 @@ def rescore_edited(job_url: str, job_title: str, edited_summary: str,
     """User hand-edited the summary → re-score and re-check authenticity."""
     base_md = rz.load_cv_md()
     md = _swap_summary(base_md, edited_summary)
+    rep = grounding.check(edited_summary, base_md)
     return {
         "resume_md": md,
         "scores": score_resume(job_url, job_title, md, jd_override),
-        "warnings": ai.authenticity_check(edited_summary, base_md),
+        "warnings": ai.authenticity_check(edited_summary, base_md) + rep.warnings(),
+        "fabrication_rate": rep.rate,
     }

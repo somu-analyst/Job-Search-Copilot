@@ -7,8 +7,8 @@ up clicking 3-4 times and sometimes can't apply at all.
 Fix: for every job we resolve an `apply_url` ONCE, at scan time, and cache it.
 
 Strategy (cheap → expensive):
-  1. Already direct?  Host is an employer ATS (Workday/Greenhouse/Lever/iCIMS/
-     SmartRecruiters/Radancy) → apply_url = url. Zero network calls.
+  1. Already direct?  Host is an employer ATS (Workday/Greenhouse/Lever/Ashby/
+     iCIMS/SmartRecruiters/Radancy) → apply_url = url. Zero network calls.
   2. Known portal?    Look up the company's ATS (cached in the companies table,
      auto-discovered on first sight) and search THAT portal for the job title.
   3. Fallback:        the company's careers page, so you at least land on the
@@ -199,6 +199,26 @@ def _lever(ref: str, title: str) -> list[tuple[str, str]]:
         return []
 
 
+def _ashby(ref: str, title: str) -> list[tuple[str, str]]:
+    """Ashby public posting API — one GET returns the employer's whole board.
+
+    Like Greenhouse/Lever it ignores any query, so step 1 already IS step 2
+    (see FULL_FEEDS). `applyUrl` is the employer's own application form;
+    `jobUrl` is the posting page — prefer the former, fall back to the latter.
+    `isListed` is false for unpublished/internal reqs — skip those.
+    """
+    try:
+        r = requests.get(
+            f"https://api.ashbyhq.com/posting-api/job-board/{ref}",
+            params={"includeCompensation": "true"}, headers=HDR, timeout=TIMEOUT)
+        if r.status_code != 200:
+            return []
+        return [(j.get("title", ""), j.get("applyUrl") or j.get("jobUrl", ""))
+                for j in r.json().get("jobs", []) if j.get("isListed", True)]
+    except Exception:
+        return []
+
+
 def _smartrecruiters(ref: str, title: str) -> list[tuple[str, str]]:
     try:
         for q in _query_variants(title):    # same AND-over-words trap as Workday
@@ -362,8 +382,8 @@ def _jpmc(ref: str, title: str) -> list[tuple[str, str]]:
 
 
 ADAPTERS = {"workday": _workday, "radancy": _radancy, "greenhouse": _greenhouse,
-            "lever": _lever, "smartrecruiters": _smartrecruiters, "bofa": _bofa,
-            "jpmc": _jpmc}
+            "lever": _lever, "ashby": _ashby, "smartrecruiters": _smartrecruiters,
+            "bofa": _bofa, "jpmc": _jpmc}
 
 # For each portal kind, how to pull the employer's ENTIRE live board.
 #
@@ -377,14 +397,15 @@ ADAPTERS = {"workday": _workday, "radancy": _radancy, "greenhouse": _greenhouse,
 #   1. cheap keyword search  -> found it? done, one request.
 #   2. full board            -> found it? done. NOT in it? the job is dead, and
 #                               we retire it instead of inventing a link.
-# Greenhouse and Lever ignore the query anyway and hand back the whole board, so
-# for them step 1 already IS step 2.
+# Greenhouse, Lever and Ashby ignore the query anyway and hand back the whole
+# board, so for them step 1 already IS step 2.
 FULL_FEEDS = {
     "bofa": lambda ref: _bofa(ref, ""),
     "jpmc": lambda ref: _jpmc(ref, ""),
     "workday": _workday_all,
     "greenhouse": lambda ref: _greenhouse(ref, ""),
     "lever": lambda ref: _lever(ref, ""),
+    "ashby": lambda ref: _ashby(ref, ""),
 }
 
 
@@ -505,6 +526,7 @@ _ATS_SIGNATURES = [
         r"([A-Za-z0-9_-]+)", re.I)),
     ("greenhouse", re.compile(r"boards\.greenhouse\.io/([a-z0-9]+)", re.I)),
     ("lever", re.compile(r"jobs\.lever\.co/([a-z0-9-]+)", re.I)),
+    ("ashby", re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9._-]+)", re.I)),
     ("smartrecruiters", re.compile(
         r"careers\.smartrecruiters\.com/([A-Za-z0-9]+)", re.I)),
 ]
@@ -540,6 +562,8 @@ def _probe_ok(kind: str, body) -> bool:
             return bool(body.get("jobs"))
         if kind == "lever":
             return isinstance(body, list) and len(body) > 0
+        if kind == "ashby":
+            return bool(body.get("jobs"))
         if kind == "smartrecruiters":
             return bool(body.get("content")) and int(body.get("totalFound", 0)) > 0
     except Exception:
@@ -569,6 +593,7 @@ def discover_portal(company: str, careers_url: str = "") -> tuple[str, str]:
     for kind, ref, probe in (
         ("greenhouse", dashed, f"https://boards-api.greenhouse.io/v1/boards/{dashed}/jobs"),
         ("lever", dashed, f"https://api.lever.co/v0/postings/{dashed}?mode=json&limit=5"),
+        ("ashby", dashed, f"https://api.ashbyhq.com/posting-api/job-board/{dashed}?includeCompensation=true"),
         ("smartrecruiters", slug, f"https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit=5"),
     ):
         try:

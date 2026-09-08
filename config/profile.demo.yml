@@ -63,6 +63,7 @@ api_keys:
   adzuna_app_id: ""
   adzuna_app_key: ""
   jooble_key: ""
+  jsearch_key: ""
 
 scrape:
   board_sites: [indeed, linkedin, google]

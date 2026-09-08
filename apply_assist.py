@@ -20,10 +20,11 @@ from pathlib import Path
 
 PROFILE_DIR = Path(__file__).parent / "data" / "browser_profile"
 
-# your details for basic autofill (mirrors career-ops profile)
+# Details for basic autofill. Left blank on purpose — fill locally, or wire this
+# to read config/profile.yml's `candidate:` block (which is gitignored).
 ME = {
-    "first": "the user", "last": "",
-    "email": "somu-analyst@users.noreply.github.com", "phone": "",
+    "first": "", "last": "",
+    "email": "", "phone": "",
 }
 
 

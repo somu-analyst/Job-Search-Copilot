@@ -1,0 +1,3 @@
+-r requirements.txt
+
+pytest>=8.0        # tests/ — offline: every network and LLM call is stubbed
