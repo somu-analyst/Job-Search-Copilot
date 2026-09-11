@@ -23,6 +23,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
+import markdown as _md
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -851,6 +852,33 @@ with t_resume:
         jd_text = jd_match.fetch_jd(job["url"]) or (job.get("description") or "")
     flags = jd_match.jd_flags(jd_text)
 
+    # Resume to score against — shared by steps 2-3, defaults to your master
+    # resume. Lets you check this JD against an already-tailored version from
+    # My Resumes, or paste a different resume entirely, instead of always
+    # scoring your untouched master.
+    from src import resume_store as _rs
+    _saved = _rs.history(conn, limit=30)
+    _opts = ["📄 Master resume (resume/cv.md)"] + [
+        f"#{r['id']} · {r['created_at']} · {r['variant']} · {r['company'] or '—'} "
+        f"({r['job_title'] or 'no title'})" for r in _saved
+    ] + ["✏️ Paste a different resume"]
+    rc1, rc2 = st.columns([2.5, 3])
+    with rc1:
+        resume_choice = st.selectbox("Score against", _opts, key="resume_choice",
+                                     label_visibility="visible")
+    resume_override_text = ""
+    if resume_choice.startswith("✏️"):
+        with rc2:
+            st.write("")
+        resume_override_text = st.text_area(
+            "Paste the resume text to score against", key="resume_paste", height=140,
+            placeholder="Paste a different resume here — used only for this session, "
+                        "not saved anywhere.")
+    elif resume_choice != _opts[0]:
+        _rid = int(re.match(r"#(\d+)", resume_choice).group(1))
+        _row = _rs.get(conn, _rid)
+        resume_override_text = (_row["resume_md"] or "") if _row else ""
+
     # Step 2 — fit scores
     with s2:
         if flags["block"]:
@@ -860,7 +888,8 @@ with t_resume:
             st.warning("⚠️ " + n)
 
         with st.spinner("Scoring this position against your resume…"):
-            fit = jd_match.analyze(job["url"], job["title"], jd_override=jd_text)
+            fit = jd_match.analyze(job["url"], job["title"], jd_override=jd_text,
+                                   resume_override=resume_override_text)
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Recruiter", f"{fit['recruiter']}/10",
                   help="The 6-second skim: does the TITLE and headline echo your resume?")
@@ -902,7 +931,8 @@ with t_resume:
         st.markdown("**🤖 AI deep-dive** — reads *meaning*, not just keywords ($0, free-tier model).")
         from src import ai as _ai
         with st.spinner("Reading the JD like a hiring panel would…"):
-            deep = _ai.analyze_job(job["url"], job["title"], job["company"], jd_override=jd_text)
+            deep = _ai.analyze_job(job["url"], job["title"], job["company"],
+                                   jd_override=jd_text, resume_override=resume_override_text)
         if deep:
             d1, d2 = st.columns([1, 3])
             d1.metric("AI fit", f"{deep.get('score_10', '—')}/10")
@@ -999,6 +1029,22 @@ with t_resume:
                             index=min(2, len(labels) - 1), horizontal=True,
                             key="variant_pick")
             chosen = next(v for v in vs if v["label"] == pick)
+
+            if chosen["mode"] != "base":
+                cmp1, cmp2 = st.columns(2)
+                with cmp1:
+                    with st.expander("📄 Original resume (master, untouched)"):
+                        st.markdown(
+                            f"<div style='max-height:420px;overflow:auto'>"
+                            f"{_md.markdown(vs[0]['resume_md'], extensions=['extra'])}"
+                            f"</div>", unsafe_allow_html=True)
+                with cmp2:
+                    with st.expander(f"📄 {chosen['label']} (currently selected)",
+                                     expanded=True):
+                        st.markdown(
+                            f"<div style='max-height:420px;overflow:auto'>"
+                            f"{_md.markdown(chosen['resume_md'], extensions=['extra'])}"
+                            f"</div>", unsafe_allow_html=True)
 
             if chosen["warnings"]:
                 st.error("⚠️ **Authenticity check — this version may over-claim:**")
