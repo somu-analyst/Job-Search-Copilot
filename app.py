@@ -477,15 +477,15 @@ n_fire = conn.execute(
 n_link = conn.execute(
     "SELECT COUNT(*) FROM jobs WHERE COALESCE(apply_url,'') != ''").fetchone()[0]
 
-# ── Zoom control (CSS zoom on the whole page; Chromium-only, which covers the
-# Chrome/Edge app-window launcher this project ships with) ─────────────────
+# ── Zoom + refresh controls (Chromium-only, which covers the Chrome/Edge
+# app-window launcher this project ships with) ──────────────────────────────
 # Extra top padding: Streamlit's own sticky header overlay sits at z-index above
 # normal page content and otherwise intercepts clicks on anything rendered in
 # that top strip (caught live — the zoom buttons were unclickable without this).
 st.markdown("<style>.block-container{padding-top:3.5rem !important;}</style>",
             unsafe_allow_html=True)
 st.session_state.setdefault("zoom_pct", 100)
-zl, zc, zr = st.columns([6, 2.4, 1])
+zl, zc, zref = st.columns([5.5, 2.4, 1])
 with zc:
     # Buttons render BEFORE the caption on purpose: Streamlit runs the whole
     # script top-to-bottom per click, so a widget positioned after the caption
@@ -503,8 +503,47 @@ with zc:
             st.session_state["zoom_pct"] = 100
     with z4:
         st.caption(f"🔍 {st.session_state['zoom_pct']}%")
-st.markdown(f"<style>html {{ zoom: {st.session_state['zoom_pct']}%; }}</style>",
-            unsafe_allow_html=True)
+with zref:
+    # The launcher opens a chrome-less app window (no address bar, no browser
+    # refresh button at all — Chrome/Edge --app= mode strips all of it), so
+    # the app needs its own hard-reload control. A real page reload, not
+    # st.rerun(): this clears any stuck widget/session state, not just re-runs
+    # the script against the same state.
+    #
+    # st.markdown(unsafe_allow_html=True) renders via innerHTML, and browsers
+    # never execute <script> tags (or onclick="...") inserted that way — both
+    # were tried and silently did nothing (confirmed live: click registered,
+    # no navigation happened). components.html() renders in a real iframe
+    # (srcdoc), where a <script> tag genuinely runs — window.parent is used
+    # instead of window, since window.location.reload() in there would only
+    # reload the tiny iframe, not the actual app.
+    components.html(
+        "<button id='jsc-refresh-btn' title='Refresh the page' "
+        "style='width:100%;padding:0.35rem 0;border-radius:0.5rem;"
+        "border:1px solid rgba(128,128,128,.4);background:transparent;"
+        "cursor:pointer;font-size:1rem;font-family:inherit'>🔄</button>"
+        "<script>"
+        "document.getElementById('jsc-refresh-btn').addEventListener('click', "
+        "function(){ window.parent.location.reload(); });"
+        "</script>",
+        height=40)
+
+# Zoom is scoped to the content container, NOT <html> — zooming the whole
+# document also rescaled Streamlit's own sticky header (a fixed-position
+# element). Scoping it to .block-container leaves the header alone.
+#
+# `width` is set inversely to the zoom factor (e.g. 90.9% at 110% zoom) so
+# the ON-SCREEN footprint stays put at 100% of the parent after the zoom
+# multiplies it back up — without this, zoom's box-model treats the
+# container as literally wider, which overflowed its parent horizontally
+# and forced an unwanted sideways scrollbar (confirmed live: stMain's
+# scrollWidth exceeded its clientWidth once zoomed past 100%). Vertical
+# growth is left alone on purpose — that's the actual point of zooming in,
+# and Streamlit's own [data-testid="stMain"] already scrolls vertically.
+_zp = st.session_state["zoom_pct"]
+st.markdown(
+    f"<style>.block-container {{ zoom: {_zp}%; width: {10000 / _zp:.4f}%; }}</style>",
+    unsafe_allow_html=True)
 
 ui.hero("Job Search Copilot",
         "Finds roles across every source, scores them against your resume, "
