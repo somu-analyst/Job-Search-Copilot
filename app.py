@@ -476,6 +476,35 @@ n_fire = conn.execute(
 n_link = conn.execute(
     "SELECT COUNT(*) FROM jobs WHERE COALESCE(apply_url,'') != ''").fetchone()[0]
 
+# ── Zoom control (CSS zoom on the whole page; Chromium-only, which covers the
+# Chrome/Edge app-window launcher this project ships with) ─────────────────
+# Extra top padding: Streamlit's own sticky header overlay sits at z-index above
+# normal page content and otherwise intercepts clicks on anything rendered in
+# that top strip (caught live — the zoom buttons were unclickable without this).
+st.markdown("<style>.block-container{padding-top:3.5rem !important;}</style>",
+            unsafe_allow_html=True)
+st.session_state.setdefault("zoom_pct", 100)
+zl, zc, zr = st.columns([6, 2.4, 1])
+with zc:
+    # Buttons render BEFORE the caption on purpose: Streamlit runs the whole
+    # script top-to-bottom per click, so a widget positioned after the caption
+    # would only show its new value on the NEXT rerun, not this one (caught
+    # live via a Playwright check — the reset button read stale until moved).
+    z1, z2, z3, z4 = st.columns([1, 1, 1, 1.3])
+    with z1:
+        if st.button("➖", key="zoom_out", help="Zoom out"):
+            st.session_state["zoom_pct"] = max(70, st.session_state["zoom_pct"] - 10)
+    with z2:
+        if st.button("➕", key="zoom_in", help="Zoom in"):
+            st.session_state["zoom_pct"] = min(150, st.session_state["zoom_pct"] + 10)
+    with z3:
+        if st.button("↺", key="zoom_reset", help="Reset zoom"):
+            st.session_state["zoom_pct"] = 100
+    with z4:
+        st.caption(f"🔍 {st.session_state['zoom_pct']}%")
+st.markdown(f"<style>html {{ zoom: {st.session_state['zoom_pct']}%; }}</style>",
+            unsafe_allow_html=True)
+
 ui.hero("Job Search Copilot",
         "Finds roles across every source, scores them against your resume, "
         "tailors it per job, and links you straight to the employer's own "
