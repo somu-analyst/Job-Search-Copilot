@@ -478,8 +478,15 @@ def authenticity_check(tailored_summary: str, base_resume: str = "") -> list[str
 
 def tailor_summary_offline(url: str, title: str, company: str) -> str:
     """Deterministic ($0, always works) fallback when free models are capped.
-    Front-loads the JD's matched skills into a one-line targeting sentence
-    prepended to the resume's existing summary — factual, no fabrication."""
+    Appends the JD's matched skills as a plain closing sentence on the
+    resume's existing summary — factual, no fabrication, phrased like
+    something a person would actually write. The original version prepended
+    "Targeting {title} at {company}: direct match on {skills}." — reported
+    live, twice, as reading like leaked internal reasoning, not resume prose
+    nobody writes "direct match on X" about themselves. Also redundant: you
+    ARE applying to this exact job, restating the title/company back at
+    yourself in the summary adds nothing a recruiter doesn't already know
+    from the application itself."""
     from .jd_match import fetch_jd, SKILLS
     import re as _re
     resume = load_cv_md()
@@ -496,6 +503,5 @@ def tailor_summary_offline(url: str, title: str, company: str) -> str:
                else s.strip().title()
                for s in SKILLS
                if s.strip() and s.strip() in jd and s.strip() in resume_l][:8]
-    lead = (f"Targeting {title} at {company}: "
-            f"direct match on {', '.join(matched)}. " if matched else "")
-    return (lead + base).strip()
+    tail = (f" Directly experienced in {', '.join(matched)}." if matched else "")
+    return (base + tail).strip()
