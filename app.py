@@ -733,13 +733,20 @@ with t_resume:
         ext = st.session_state.get("external_job")
         if ext:
             from src.score import score_title
+            # score_title only reads its `title` arg for keyword hits — with no
+            # title typed in, "(pasted job)" has nothing to match and always
+            # floors to 1.0/10, which reads as a real (and wrong) verdict on
+            # the card. Fall back to the JD text itself so this quick badge
+            # reflects the actual posting, not an empty placeholder.
+            title_for_score = (ext["title"] if ext["title"] != "(pasted job)"
+                               else ext["description"] or ext["title"])
             job = pd.Series({
                 "url": ext["url"], "title": ext["title"], "company": ext["company"],
                 "location": "", "source": "pasted", "salary": "",
                 "description": ext["description"],
                 "apply_url": ext["url"] if ext["url"].startswith("http") else "",
                 "apply_kind": "", "tags": "", "industry": "", "status": "new",
-                "score": score_title(ext["title"], ext["company"]),
+                "score": score_title(title_for_score, ext["company"]),
             })
             st.session_state["picked_url"] = job["url"]
             st.session_state["step_now"] = 2
