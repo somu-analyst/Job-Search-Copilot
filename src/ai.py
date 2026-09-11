@@ -166,12 +166,20 @@ def gemini_status() -> str:
 
 
 def _gemini_chat(prompt: str, max_tokens=1400) -> str:
-    """Google Gemini free tier (~1500 req/day) — used when OpenRouter is capped."""
+    """Google Gemini free tier (~1500 req/day).
+
+    Uses the "-latest" model aliases, not a pinned version -- gemini-2.0-flash
+    and gemini-2.0-flash-lite (the previously hardcoded names) were BOTH gone
+    from Google's live model catalog (confirmed live via the ListModels API,
+    2026-09-11: key auth was fine, 200 OK, the models just don't exist
+    anymore -- every call was silently 404ing, not the "AQ. key" issue the
+    old comment blamed). The alias tracks whatever Google currently serves as
+    its recommended flash model, so this can't go stale the same way again."""
     global _last_error
     key = _gemini_key()
     if not key:
         return ""
-    for model in ("gemini-2.0-flash", "gemini-2.0-flash-lite"):
+    for model in ("gemini-flash-latest", "gemini-flash-lite-latest"):
         try:
             r = requests.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
@@ -196,13 +204,8 @@ def last_error() -> str:
     return _last_error
 
 
-def _chat(prompt: str, max_tokens=1400, passes=2) -> str:
-    """Try the best free models; repeat the sweep `passes` times before giving up.
-    Capped to the top few models with a short timeout so it stays fast even when
-    the free tier is busy (falls through to Gemini, then gives up gracefully)."""
+def _openrouter_chat(prompt: str, max_tokens: int, passes: int, key: str) -> str:
     global _last_error
-    _last_error = ""
-    key = _key()
     # Use ALL fast free (:free) models — no paid ones. Giant/slow models are
     # already excluded in _free_models(), and we return on the first success,
     # so a wide list only helps: when the top models are rate-limited (429s
@@ -231,15 +234,29 @@ def _chat(prompt: str, max_tokens=1400, passes=2) -> str:
                 continue
         if attempt < passes - 1:
             time.sleep(1.5)
-    # ── Fallback ladder, cheapest first. We only descend when the tier above is
-    # genuinely exhausted, so the paid lane is a safety net, not the default.
-    #   1. OpenRouter :free   (above)     — free
-    #   2. Gemini free tier                — free
-    #   3. Kimchi (Cast AI)                — PAID, prepaid credit
+    return ""
+
+
+def _chat(prompt: str, max_tokens=1400, passes=2) -> str:
+    """Gemini first, then the OpenRouter free sweep, then paid Kimchi as a last
+    resort. Gemini first by explicit choice (2026-09-11): Google's free tier
+    trains on submitted prompts (resume content included) -- putting it first
+    means MORE traffic goes through a training-enabled free tier, not less;
+    this was a known, flagged trade-off, not an oversight."""
+    global _last_error
+    _last_error = ""
+    key = _key()
+
     g = _gemini_chat(prompt, max_tokens)
     if g:
         return g
 
+    out = _openrouter_chat(prompt, max_tokens, passes, key)
+    if out:
+        return out
+
+    # Kimchi (Cast AI) — PAID, prepaid credit. Only reached when both free
+    # tiers above are genuinely exhausted, so it's a safety net, not the default.
     k = _kimchi_chat(prompt, max_tokens)
     if k:
         return k
