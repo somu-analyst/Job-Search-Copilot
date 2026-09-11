@@ -9,3 +9,7 @@ beautifulsoup4>=4.12  # parses job cards out of Gmail digest emails (src/scrape_
 google-api-python-client>=2.100   # Gmail lane (opt-in, --gmail)
 google-auth-httplib2>=0.2
 google-auth-oauthlib>=1.2
+xhtml2pdf>=0.2.16     # resume PDF download (src/resume.py:tailored_resume_pdf) -- pure
+                      # Python, no external binary, so it works the same on the VM
+python-docx>=1.1.0    # resume .docx download (tailored_resume_docx)
+htmldocx>=0.0.9       # converts the resume's HTML+CSS straight to .docx

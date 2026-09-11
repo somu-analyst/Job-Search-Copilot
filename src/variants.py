@@ -9,6 +9,7 @@ exactly which resume went to which employer.
 """
 from __future__ import annotations
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from . import ai, corpus as cx, grounding, jd_match, resume as rz
 
@@ -55,7 +56,8 @@ def build(job_url: str, job_title: str, company: str, *,
         "mode": "base",
     }]
 
-    for label, intensity, blurb in (presets or PRESETS):
+    def _one(preset):
+        label, intensity, blurb = preset
         band = ("Conservative" if intensity <= 3 else
                 "Balanced" if intensity <= 7 else "Aggressive")
         # Preferred path: the model cites which resume facts it used, so the
@@ -73,7 +75,7 @@ def build(job_url: str, job_title: str, company: str, *,
             s, cited = ai.tailor_summary_offline(job_url, job_title, company), []
             mode = "offline"
         if not s:
-            continue
+            return None
         md = _swap_summary(base_md, s)
         # Two guards, different failure modes: authenticity_check catches NEW
         # material (invented skills/numbers/hype), grounding catches claims
@@ -81,7 +83,7 @@ def build(job_url: str, job_title: str, company: str, *,
         # by best-match search when they don't.
         rep = (grounding.check_cited(cited, cv) if cited
                else grounding.check(s, base_md, refs=refs))
-        out.append({
+        return {
             "label": label,
             "blurb": blurb,
             "summary": s,
@@ -92,7 +94,18 @@ def build(job_url: str, job_title: str, company: str, *,
             "claims_checked": rep.checked,
             "citations": cited,
             "mode": mode,
-        })
+        }
+
+    presets = list(presets or PRESETS)
+    # The 3 presets are independent network-bound LLM calls with nothing to
+    # share -- running them one after another was the single biggest chunk of
+    # "why is this taking so long" (confirmed live: ~30s+ sequential). Threads
+    # are the right tool here (not asyncio): each call is blocked on I/O
+    # (requests.post), which releases the GIL, so 3 threads genuinely run
+    # concurrently instead of taking turns.
+    with ThreadPoolExecutor(max_workers=len(presets)) as pool:
+        results = list(pool.map(_one, presets))
+    out.extend(r for r in results if r is not None)
     return out
 
 

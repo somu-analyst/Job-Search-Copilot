@@ -101,11 +101,14 @@ body{font-family:Calibri,Carlito,Arial,sans-serif;max-width:8.0in;margin:0 auto;
 /* Name + contact line */
 h1{font-size:20pt;margin:0;color:#111418;font-weight:700;letter-spacing:-.4px}
 h1 + p{margin:3px 0 0;font-size:10pt;color:#3A4048}
-h1 + p strong{color:#15803D;font-weight:600;letter-spacing:.2px}
+h1 + p strong{color:#111418;font-weight:600;letter-spacing:.2px}
 h1 + p a{color:#3A4048;text-decoration:none;border-bottom:1px solid #C9CFD6}
 
-/* Section headings: a rule the eye can lock onto while skimming */
-h2{font-size:9.8pt;color:#15803D;font-weight:700;text-transform:uppercase;
+/* Section headings: a rule the eye can lock onto while skimming.
+   Plain black on purpose — no accent color, so it reads identically after
+   any portal re-saves/re-prints it, and never looks "off" on a screen that
+   renders color differently. */
+h2{font-size:9.8pt;color:#111418;font-weight:700;text-transform:uppercase;
    letter-spacing:1.1px;margin:17px 0 7px;padding-bottom:3px;
    border-bottom:1px solid #D7DCE2}
 
@@ -163,6 +166,40 @@ def tailored_resume_html(job_title: str = "", company: str = "",
     return (f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
             f"<title>Resume - {_ats_clean(job_title) or 'Master'}</title>"
             f"<style>{_STYLE}</style></head><body>{body}</body></html>")
+
+
+def tailored_resume_pdf(job_title: str = "", company: str = "",
+                        summary_override: str = "") -> bytes:
+    """Same resume as tailored_resume_html(), rendered straight to PDF bytes --
+    a real download instead of the HTML-then-Ctrl+P-yourself step. xhtml2pdf
+    (pure Python, no external binary/browser needed -- works the same locally
+    and on the Oracle VM) reads the identical HTML+CSS, so this is always in
+    sync with the HTML version by construction, never a second copy to drift."""
+    from io import BytesIO
+    from xhtml2pdf import pisa
+    html_doc = tailored_resume_html(job_title, company, summary_override)
+    buf = BytesIO()
+    result = pisa.CreatePDF(html_doc, dest=buf)
+    if result.err:
+        return b""
+    return buf.getvalue()
+
+
+def tailored_resume_docx(job_title: str = "", company: str = "",
+                         summary_override: str = "") -> bytes:
+    """Same resume, as a real .docx -- some ATS portals and recruiters still
+    specifically ask for Word, not PDF. htmldocx converts the identical
+    HTML+CSS this file already produces, so it's the same single source of
+    truth as the HTML/PDF versions, not a second copy that can drift."""
+    from io import BytesIO
+    from docx import Document
+    from htmldocx import HtmlToDocx
+    html_doc = tailored_resume_html(job_title, company, summary_override)
+    document = Document()
+    HtmlToDocx().add_html_to_document(html_doc, document)
+    buf = BytesIO()
+    document.save(buf)
+    return buf.getvalue()
 
 
 def matched_keywords_for(title: str) -> list[str]:

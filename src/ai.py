@@ -470,9 +470,13 @@ def tailor_summary_offline(url: str, title: str, company: str) -> str:
     base = (m.group(1).strip() if m else "").split("\n")[0]
     jd = (fetch_jd(url) or title).lower()
     resume_l = resume.lower()
-    # skills the JD wants AND the resume proves
-    matched = [s.upper() if s in ("sas", "sql", "aml", "kyc", "ccar", "cecl", "etl")
-               else s.title()
+    # skills the JD wants AND the resume proves. SKILLS entries like "r " carry
+    # a deliberate trailing space (word-boundary guard against matching "r"
+    # inside "for"/"senior") -- stripped here so it doesn't leak into the
+    # display text as "R , Fraud" (reported live).
+    matched = [s.strip().upper() if s.strip() in ("sas", "sql", "aml", "kyc", "ccar",
+                                                   "cecl", "etl", "r")
+               else s.strip().title()
                for s in SKILLS
                if s.strip() and s.strip() in jd and s.strip() in resume_l][:8]
     lead = (f"Targeting {title} at {company}: "
