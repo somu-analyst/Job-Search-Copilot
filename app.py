@@ -1206,19 +1206,25 @@ with t_resume:
                 st.markdown(f"**📄 Documents** — using **{final_label}**")
                 st.caption("ATS-clean: no color, no graphics, plain single-column "
                            "formatting — reads identically on any portal's parser.")
+                _compact = st.checkbox(
+                    "📏 Compact (fit more onto one page)", key="doc_compact",
+                    help="Tighter type and spacing — content is unchanged, so a "
+                         "genuinely long work history may still run past one page.")
                 _co_slug = slugify(job['company'])[:30]
                 dl1, dl2 = st.columns(2)
                 with dl1:
                     with st.spinner("Building PDF…"):
                         pdf_bytes = rz.tailored_resume_pdf(job["title"], job["company"],
-                                                           summary_override=final_summary)
+                                                           summary_override=final_summary,
+                                                           compact=_compact)
                     st.download_button("⬇ Resume (.pdf)", pdf_bytes,
                                        f"resume-{_co_slug}.pdf",
                                        "application/pdf", width='stretch', type="primary")
                 with dl2:
                     with st.spinner("Building Word doc…"):
                         docx_bytes = rz.tailored_resume_docx(job["title"], job["company"],
-                                                             summary_override=final_summary)
+                                                             summary_override=final_summary,
+                                                             compact=_compact)
                     st.download_button("⬇ Resume (.docx)", docx_bytes,
                                        f"resume-{_co_slug}.docx",
                                        "application/vnd.openxmlformats-officedocument"

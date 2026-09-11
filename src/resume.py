@@ -93,43 +93,57 @@ def load_co_profile() -> dict:
 # ATS-safe by construction: single column, no tables, no floats, no graphics,
 # no text in images, no headers/footers. Everything a parser needs is plain
 # semantic HTML — the styling only affects how a HUMAN sees it.
-_STYLE = """
-@page{margin:0.5in}
-body{font-family:Calibri,Carlito,Arial,sans-serif;max-width:8.0in;margin:0 auto;
-     padding:26px 34px 30px;color:#1F2328;font-size:10.4pt;line-height:1.42}
+def _style(compact: bool = False) -> str:
+    """compact=True: a genuinely tighter layout (smaller type, less white
+    space, no gap before each new employer) for fitting more onto one page --
+    not just a smaller font on the same spacing, which barely helps. Content
+    is untouched either way; this can't force truly LONG history onto one
+    page by itself (that needs trimming which bullets to include), but it
+    gets meaningfully closer without cutting anything for most resumes."""
+    pad = "18px 28px 20px" if compact else "26px 34px 30px"
+    body_size = "9.3pt" if compact else "10.4pt"
+    line_height = "1.28" if compact else "1.42"
+    h2_margin = "10px 0 4px" if compact else "17px 0 7px"
+    h3_margin = "7px 0 1px" if compact else "11px 0 1px"
+    ul_margin = "3px 0 6px" if compact else "5px 0 9px"
+    li_margin = "1px 0" if compact else "3px 0"
+    return f"""
+@page{{margin:{'0.4in' if compact else '0.5in'}}}
+body{{font-family:Calibri,Carlito,Arial,sans-serif;max-width:8.0in;margin:0 auto;
+     padding:{pad};color:#1F2328;font-size:{body_size};line-height:{line_height}}}
 
 /* Name + contact line */
-h1{font-size:20pt;margin:0;color:#111418;font-weight:700;letter-spacing:-.4px}
-h1 + p{margin:3px 0 0;font-size:10pt;color:#3A4048}
-h1 + p strong{color:#111418;font-weight:600;letter-spacing:.2px}
-h1 + p a{color:#3A4048;text-decoration:none;border-bottom:1px solid #C9CFD6}
+h1{{font-size:{'17pt' if compact else '20pt'};margin:0;color:#111418;font-weight:700;letter-spacing:-.4px}}
+h1 + p{{margin:3px 0 0;font-size:{'9pt' if compact else '10pt'};color:#3A4048}}
+h1 + p strong{{color:#111418;font-weight:600;letter-spacing:.2px}}
+h1 + p a{{color:#3A4048;text-decoration:none;border-bottom:1px solid #C9CFD6}}
 
 /* Section headings: a rule the eye can lock onto while skimming.
    Plain black on purpose — no accent color, so it reads identically after
    any portal re-saves/re-prints it, and never looks "off" on a screen that
    renders color differently. */
-h2{font-size:9.8pt;color:#111418;font-weight:700;text-transform:uppercase;
-   letter-spacing:1.1px;margin:17px 0 7px;padding-bottom:3px;
-   border-bottom:1px solid #D7DCE2}
+h2{{font-size:9.8pt;color:#111418;font-weight:700;text-transform:uppercase;
+   letter-spacing:1.1px;margin:{h2_margin};padding-bottom:3px;
+   border-bottom:1px solid #D7DCE2}}
 
 /* Employer — role */
-h3{font-size:11pt;margin:11px 0 1px;color:#111418;font-weight:700}
+h3{{font-size:{'10.2pt' if compact else '11pt'};margin:{h3_margin};color:#111418;font-weight:700}}
 /* Dates line (italic in the markdown) */
-h3 + p em{color:#5B6472;font-size:9.4pt;font-style:normal;letter-spacing:.2px}
+h3 + p em{{color:#5B6472;font-size:9.4pt;font-style:normal;letter-spacing:.2px}}
 
-ul{margin:5px 0 9px;padding-left:16px}
-li{margin:3px 0;padding-left:2px}
-p{margin:5px 0}
+ul{{margin:{ul_margin};padding-left:16px}}
+li{{margin:{li_margin};padding-left:2px}}
+p{{margin:{'3px 0' if compact else '5px 0'}}}
 
 /* Bold is EARNED, not decoration: only the strongest outcome per role carries
    it, so a skimming recruiter's eye lands on results instead of wallpaper. */
-strong{color:#111418;font-weight:700}
+strong{{color:#111418;font-weight:700}}
 
-@media print{
-  body{padding:0}
-  h2{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  h3{page-break-after:avoid} ul{page-break-inside:avoid}
-}
+@media print{{
+  body{{padding:0}}
+  h2{{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  h3{{page-break-after:avoid}} ul{{page-break-inside:avoid}}
+}}
 """
 
 
@@ -146,9 +160,11 @@ def _ats_clean(text: str) -> str:
 
 
 def tailored_resume_html(job_title: str = "", company: str = "",
-                         summary_override: str = "") -> str:
+                         summary_override: str = "", compact: bool = False) -> str:
     """Master resume → standalone ATS-safe HTML (no emojis, no gimmicks).
-    summary_override replaces the Professional Summary section (AI tailoring)."""
+    summary_override replaces the Professional Summary section (AI tailoring).
+    compact=True fits more onto one page via tighter spacing/type -- content
+    is unchanged, so a genuinely long history may still run past one page."""
     md_text = load_cv_md()
     # strip html comments (TODO markers etc.) and emoji
     md_text = re.sub(r"<!--.*?-->", "", md_text, flags=re.S)
@@ -165,11 +181,11 @@ def tailored_resume_html(job_title: str = "", company: str = "",
     body = _md.markdown(md_text, extensions=["extra"])
     return (f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
             f"<title>Resume - {_ats_clean(job_title) or 'Master'}</title>"
-            f"<style>{_STYLE}</style></head><body>{body}</body></html>")
+            f"<style>{_style(compact)}</style></head><body>{body}</body></html>")
 
 
 def tailored_resume_pdf(job_title: str = "", company: str = "",
-                        summary_override: str = "") -> bytes:
+                        summary_override: str = "", compact: bool = False) -> bytes:
     """Same resume as tailored_resume_html(), rendered straight to PDF bytes --
     a real download instead of the HTML-then-Ctrl+P-yourself step. xhtml2pdf
     (pure Python, no external binary/browser needed -- works the same locally
@@ -177,7 +193,7 @@ def tailored_resume_pdf(job_title: str = "", company: str = "",
     sync with the HTML version by construction, never a second copy to drift."""
     from io import BytesIO
     from xhtml2pdf import pisa
-    html_doc = tailored_resume_html(job_title, company, summary_override)
+    html_doc = tailored_resume_html(job_title, company, summary_override, compact)
     buf = BytesIO()
     result = pisa.CreatePDF(html_doc, dest=buf)
     if result.err:
@@ -186,7 +202,7 @@ def tailored_resume_pdf(job_title: str = "", company: str = "",
 
 
 def tailored_resume_docx(job_title: str = "", company: str = "",
-                         summary_override: str = "") -> bytes:
+                         summary_override: str = "", compact: bool = False) -> bytes:
     """Same resume, as a real .docx -- some ATS portals and recruiters still
     specifically ask for Word, not PDF. htmldocx converts the identical
     HTML+CSS this file already produces, so it's the same single source of
@@ -194,7 +210,7 @@ def tailored_resume_docx(job_title: str = "", company: str = "",
     from io import BytesIO
     from docx import Document
     from htmldocx import HtmlToDocx
-    html_doc = tailored_resume_html(job_title, company, summary_override)
+    html_doc = tailored_resume_html(job_title, company, summary_override, compact)
     document = Document()
     HtmlToDocx().add_html_to_document(html_doc, document)
     buf = BytesIO()
