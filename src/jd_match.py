@@ -53,26 +53,59 @@ DOMAIN_DEEP = ["fraud", "aml", "bsa", "kyc", "sanctions", "ofac", "sar",
                "loss mitigation"]
 
 
-def _fetch_jd_workday(url: str) -> str:
-    """Full JD text via the Workday JSON careers API ('' if not a Workday URL)."""
+def _fetch_jd_workday(url: str) -> tuple[str, str]:
+    """(text, title) via the Workday JSON careers API ('', '') if not a Workday URL."""
     try:
         u = urlparse(url)
         if "myworkdayjobs.com" not in u.netloc or "/en-US/" not in u.path:
-            return ""
+            return "", ""
         tenant = u.netloc.split(".")[0]
         after = u.path.split("/en-US/")[1]
         site, _, jobpath = after.partition("/")
         api = f"https://{u.netloc}/wday/cxs/{tenant}/{site}/{jobpath}"
         r = requests.get(api, headers=HDR, timeout=15)
         if r.status_code != 200:
-            return ""
-        html = (r.json().get("jobPostingInfo") or {}).get("jobDescription", "")
-        return re.sub(r"<[^>]+>", " ", html)
+            return "", ""
+        info = r.json().get("jobPostingInfo") or {}
+        html = info.get("jobDescription", "")
+        return re.sub(r"<[^>]+>", " ", html), (info.get("title") or "")
     except Exception:
-        return ""
+        return "", ""
 
 
 _JD_MAXLEN = 12000  # matches the cap db.py already applies to stored descriptions
+
+
+def _fetch_jd_oracle_recruiting_cloud(url: str) -> tuple[str, str]:
+    """(text, title) via Oracle Recruiting Cloud's own detail API ('', '') if
+    not this platform. JPMorgan Chase runs on it (see src/direct_apply.py's
+    `_jpmc`), and other large employers use the same Fusion HCM product under
+    their own tenant, so this generalizes past JPMC by URL shape alone.
+    The candidate-experience page itself is JS-rendered -- a plain page fetch
+    gets an empty shell, so this platform NEEDS its own API call, same reason
+    Workday gets one above. Verified live against a real JPMC posting."""
+    try:
+        u = urlparse(url)
+        if "oraclecloud.com" not in u.netloc or "/CandidateExperience/" not in u.path:
+            return "", ""
+        m = re.search(r"/sites/([^/]+)/job/(\d+)", u.path)
+        if not m:
+            return "", ""
+        site, job_id = m.group(1), m.group(2)
+        api = (f"https://{u.netloc}/hcmRestApi/resources/latest/"
+               f"recruitingCEJobRequisitionDetails")
+        r = requests.get(
+            api, params={"onlyData": "true",
+                        "finder": f'ById;Id="{job_id}",siteNumber={site}'},
+            headers=HDR, timeout=15)
+        if r.status_code != 200:
+            return "", ""
+        items = r.json().get("items") or []
+        item = items[0] if items else {}
+        html = item.get("ExternalDescriptionStr") or ""
+        return re.sub(r"<[^>]+>", " ", html), (item.get("Title") or "")
+    except Exception:
+        return "", ""
 
 
 def fetch_jd_generic(url: str) -> str:
@@ -95,11 +128,25 @@ def fetch_jd_generic(url: str) -> str:
         return ""
 
 
+def fetch_jd_and_title(url: str) -> tuple[str, str]:
+    """(JD text, employer-listed job title) for a job URL -- ('', '') if not
+    fetchable. Tries each known platform's own structured API first (most
+    accurate, and the only option for JS-rendered career sites a plain fetch
+    can't see into), then falls back to generic page scraping (no title from
+    that rung) for everything else."""
+    text, title = _fetch_jd_workday(url)
+    if text:
+        return text, title
+    text, title = _fetch_jd_oracle_recruiting_cloud(url)
+    if text:
+        return text, title
+    return fetch_jd_generic(url), ""
+
+
 def fetch_jd(url: str) -> str:
-    """Full JD text for a job URL ('' if not fetchable). Tries the structured
-    Workday API first (most accurate), falls back to generic page scraping
-    for every other source."""
-    return _fetch_jd_workday(url) or fetch_jd_generic(url)
+    """Full JD text for a job URL ('' if not fetchable). See fetch_jd_and_title
+    for the version that also recovers the employer's own job title."""
+    return fetch_jd_and_title(url)[0]
 
 
 def jd_flags(jd: str) -> dict:

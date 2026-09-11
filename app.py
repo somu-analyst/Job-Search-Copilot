@@ -716,10 +716,18 @@ with t_resume:
                     st.warning("Paste a URL or the job description text first.")
                 else:
                     with st.spinner("Fetching the job description…"):
-                        jd_resolved = ext_jd.strip() or jd_match.fetch_jd(ext_url.strip())
+                        if ext_jd.strip():
+                            jd_resolved, fetched_title = ext_jd.strip(), ""
+                        else:
+                            jd_resolved, fetched_title = jd_match.fetch_jd_and_title(
+                                ext_url.strip())
+                    # Employer-listed title (when a structured API recovered one)
+                    # beats the generic placeholder, but never overrides what you
+                    # typed yourself.
+                    resolved_title = ext_title.strip() or fetched_title or "(pasted job)"
                     st.session_state["external_job"] = {
                         "url": ext_url.strip() or f"pasted:{abs(hash(ext_jd.strip()))}",
-                        "title": ext_title.strip() or "(pasted job)",
+                        "title": resolved_title,
                         "company": ext_company.strip(),
                         "description": jd_resolved,
                     }
