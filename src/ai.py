@@ -371,6 +371,66 @@ _LEVELS = {
 }
 
 
+def tailor_summaries_combined(jd_text: str, title: str, company: str,
+                              base_resume: str = "",
+                              emphasize: list | None = None) -> dict:
+    """All 3 tailored variants (Conservative/Balanced/ATS-max) in ONE model
+    call instead of 3 separate round-trips -- the real fix for "why is this
+    taking so long": even running 3 calls in parallel (variants.py already
+    does) still costs one full network+inference latency, just paid once
+    instead of three times sequentially. This pays it ONE time, period.
+
+    Trade-off, deliberately accepted: this is the plain (non-cited) style —
+    no per-sentence fact citations, same as the existing tailor_summary()
+    fallback. Asking one small free model for 3x the citation bookkeeping in
+    one JSON response raises the odds of a malformed reply on the models
+    most likely to be free-tier-capped in the first place; the per-sentence
+    cited path stays available by calling tailor_summary_cited() separately
+    if that grounding detail matters more than speed for a given use.
+
+    Returns {} on failure (caller falls back to the existing per-variant path,
+    unchanged) -- this is a faster first attempt, not a replacement."""
+    if not (jd_text or "").strip():
+        return {}
+    resume = base_resume or load_cv_md()
+    emph = ""
+    if emphasize:
+        emph = ("\nThe candidate CONFIRMS real experience with: " + ", ".join(emphasize)
+                + ". Weave these in naturally where truthful — if the resume gives no "
+                "basis for one, leave it out rather than fabricate.")
+    prompt = f"""Write THREE versions of this resume's Professional Summary for
+the job below, at three tailoring intensities. Each max 4 lines, plain text,
+factual (use ONLY facts present in the resume — NEVER invent skills, numbers,
+employers, or titles), no emojis, no hype words (expert, world-class, guru,
+10x).{emph}
+
+- conservative: {_LEVELS['Conservative']}
+- balanced: {_LEVELS['Balanced']}
+- ats_max: {_LEVELS['Aggressive']}
+
+Respond with ONLY this JSON:
+{{"conservative": "<summary text>", "balanced": "<summary text>", "ats_max": "<summary text>"}}
+
+JOB ({title} at {company}):
+{jd_text[:5000]}
+
+RESUME:
+{resume[:6000]}"""
+    data = _json_block(_chat(prompt, max_tokens=1200))
+    out = {}
+    for key in ("conservative", "balanced", "ats_max"):
+        s = (data.get(key) or "").strip()
+        if s:
+            s = re.sub(r"^\s*#+.*\n", "", s)
+            s = re.sub(r"^\s*(professional summary|summary)\s*:?\s*\n", "", s, flags=re.I)
+            out[key] = s.strip()
+    # All three or none -- a partial set (some real, some missing) would mean
+    # some job variants silently fall back to offline while siblings from the
+    # same call used the real model, an inconsistency not worth the complexity
+    # to reconcile when the existing per-variant path already handles this.
+    return out if len(out) == 3 else {}
+
+
 def tailor_summary(url: str, title: str, company: str, level: str = "Balanced",
                    intensity: int = 5, emphasize: list | None = None) -> str:
     """Rewritten 4-line Professional Summary targeted at this job ('' on failure).

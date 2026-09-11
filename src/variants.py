@@ -56,24 +56,65 @@ def build(job_url: str, job_title: str, company: str, *,
         "mode": "base",
     }]
 
+    presets = list(presets or PRESETS)
+    jd_text = jd_override or jd_match.fetch_jd(job_url)
+
+    # Fast path: all 3 variants in ONE model call instead of 3 (parallel or
+    # not, 3 calls still each pay full network+inference latency). Only the
+    # plain style (no per-sentence citations -- see tailor_summaries_combined
+    # for why); grounded via the same best-match check the non-cited fallback
+    # already uses below.
+    combined = ai.tailor_summaries_combined(
+        jd_text, job_title, company, base_md, emphasize or []) if jd_text else {}
+    _label_key = {"Conservative": "conservative", "Balanced": "balanced",
+                 "ATS-max": "ats_max"}
+    if combined:
+        for label, intensity, blurb in presets:
+            s = combined.get(_label_key.get(label, ""), "")
+            if not s:
+                continue
+            md = _swap_summary(base_md, s)
+            rep = grounding.check(s, base_md, refs=refs)
+            out.append({
+                "label": label, "blurb": blurb, "summary": s, "resume_md": md,
+                "scores": score_resume(job_url, job_title, md, jd_override),
+                "warnings": ai.authenticity_check(s, base_md) + rep.warnings(),
+                "fabrication_rate": rep.rate, "claims_checked": rep.checked,
+                "citations": [], "mode": "AI-combined",
+            })
+        if len(out) == len(presets) + 1:
+            return out          # fast path fully succeeded -- done, one round trip
+        out = out[:1]           # partial (shouldn't happen -- combined is all-or-nothing
+                                 # by construction) -- fall through to the per-variant path
+
+    # If the combined call was attempted and came back with genuinely nothing
+    # (every provider exhausted -- not just "no JD text to work with"), the
+    # per-preset AI calls below would just re-hit the same dead providers 3
+    # more times for a near-certain repeat failure. Skip straight to the
+    # deterministic offline fallback instead of paying that latency again.
+    skip_ai = bool(jd_text) and not combined and bool(ai.last_error())
+
     def _one(preset):
         label, intensity, blurb = preset
         band = ("Conservative" if intensity <= 3 else
                 "Balanced" if intensity <= 7 else "Aggressive")
-        # Preferred path: the model cites which resume facts it used, so the
-        # check grades the pairing it intended instead of guessing at one.
-        s, cited = ai.tailor_summary_cited(job_url, job_title, company, band,
-                                           intensity=intensity,
-                                           emphasize=emphasize or [], cv_corpus=cv)
-        mode = "AI+cited"
-        if not s:
-            s, cited = ai.tailor_summary(job_url, job_title, company, band,
-                                         intensity=intensity,
-                                         emphasize=emphasize or []), []
-            mode = "AI"
-        if not s:
-            s, cited = ai.tailor_summary_offline(job_url, job_title, company), []
-            mode = "offline"
+        if skip_ai:
+            s, cited, mode = ai.tailor_summary_offline(job_url, job_title, company), [], "offline"
+        else:
+            # Preferred path: the model cites which resume facts it used, so the
+            # check grades the pairing it intended instead of guessing at one.
+            s, cited = ai.tailor_summary_cited(job_url, job_title, company, band,
+                                               intensity=intensity,
+                                               emphasize=emphasize or [], cv_corpus=cv)
+            mode = "AI+cited"
+            if not s:
+                s, cited = ai.tailor_summary(job_url, job_title, company, band,
+                                             intensity=intensity,
+                                             emphasize=emphasize or []), []
+                mode = "AI"
+            if not s:
+                s, cited = ai.tailor_summary_offline(job_url, job_title, company), []
+                mode = "offline"
         if not s:
             return None
         md = _swap_summary(base_md, s)
@@ -96,13 +137,13 @@ def build(job_url: str, job_title: str, company: str, *,
             "mode": mode,
         }
 
-    presets = list(presets or PRESETS)
     # The 3 presets are independent network-bound LLM calls with nothing to
-    # share -- running them one after another was the single biggest chunk of
-    # "why is this taking so long" (confirmed live: ~30s+ sequential). Threads
-    # are the right tool here (not asyncio): each call is blocked on I/O
+    # share -- running them one after another was a big chunk of "why is this
+    # taking so long" (confirmed live: ~30s+ sequential). Threads are the
+    # right tool here (not asyncio): each call is blocked on I/O
     # (requests.post), which releases the GIL, so 3 threads genuinely run
-    # concurrently instead of taking turns.
+    # concurrently instead of taking turns. This whole path is now the
+    # fallback for when the single combined call above didn't work out.
     with ThreadPoolExecutor(max_workers=len(presets)) as pool:
         results = list(pool.map(_one, presets))
     out.extend(r for r in results if r is not None)
