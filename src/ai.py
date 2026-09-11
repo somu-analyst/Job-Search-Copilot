@@ -328,6 +328,11 @@ def tailor_summary(url: str, title: str, company: str, level: str = "Balanced",
 Tailoring intensity: {intensity} on a 1-10 scale ({level}). {style}
 At intensity 1 change almost nothing; at 10 reframe the whole summary around the
 job's top requirements. Scale your edits to match {intensity}.{emph}
+Opening sentence structure (standard for senior/finance-risk resumes): title,
+years of experience, then 3-4 skills that directly match this job's top
+requirements — not a generic list.
+Every sentence should show IMPACT (what changed because of the work — capital/
+risk reduced, losses avoided, time saved), not just a list of tools or tasks.
 Hard rules: max 4 lines; factual (use ONLY facts present in the resume — NEVER invent
 skills, numbers, employers, or titles); plain text; no emojis; no hype words
 (expert, world-class, guru, rockstar, 10x). Respond with ONLY the rewritten summary.
@@ -377,6 +382,11 @@ Rules:
 - Every sentence must be supported by the facts you cite for it. Do not merge
   facts from two different employers into one claim.
 - Never state a number, employer, title or tool that is not in a cited fact.
+- Opening sentence: title, years of experience, then 3-4 skills that directly
+  match this job's top requirements — not a generic list (standard structure
+  for senior/finance-risk resumes).
+- Every sentence should show IMPACT (what changed because of the work —
+  capital/risk reduced, losses avoided, time saved), not just tools or tasks.
 - 3-4 sentences, plain text, no hype words (expert, world-class, guru, 10x).
 
 Respond with ONLY this JSON:
