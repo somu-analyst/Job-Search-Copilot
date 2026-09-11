@@ -27,6 +27,7 @@ config/gmail_token.json
 
 # Personal resume (users keep their own; sample shipped as cv.example.md)
 resume/cv.md
+resume/cv.md.*
 resume/article-digest.md
 
 # Browser profile from assisted-apply (contains login sessions)
