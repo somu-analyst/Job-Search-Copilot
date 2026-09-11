@@ -324,6 +324,41 @@ DRAFT SUMMARY:
     return _json_block(_chat(prompt, max_tokens=600))
 
 
+def rewrite_with_instruction(summary: str, instruction: str,
+                             base_resume: str = "") -> str:
+    """The "tell it what to change, like ChatGPT" loop -- one free-text
+    instruction ("make this sound more senior", "lead with CCAR", "shorten
+    it") applied to the current draft. Grounded the same way as every other
+    tailoring path here: only facts already in the base resume, nothing
+    invented, even when the instruction implies adding something. Returns ''
+    on failure so the caller can keep the original draft."""
+    if not (summary or "").strip() or not (instruction or "").strip():
+        return ""
+    resume = base_resume or load_cv_md()
+    prompt = f"""Rewrite this Professional Summary draft per the instruction
+below. Apply ONLY what the instruction asks — don't otherwise rewrite content
+that wasn't mentioned. Still factual: use ONLY facts present in the full
+resume below (never invent skills, numbers, employers, or titles), even if
+the instruction implies something new — if the resume doesn't support it,
+do your best within that limit and don't fabricate to satisfy the instruction.
+Plain text, no emojis, no hype words (expert, world-class, guru, 10x).
+Respond with ONLY the rewritten summary, no preamble.
+
+INSTRUCTION: {instruction}
+
+CURRENT DRAFT:
+{summary}
+
+FULL RESUME (for facts only):
+{resume[:6000]}"""
+    out = _chat(prompt, max_tokens=500)
+    if not out:
+        return ""
+    out = re.sub(r"^\s*#+.*\n", "", out)
+    out = re.sub(r"^\s*(professional summary|summary)\s*:?\s*\n", "", out, flags=re.I)
+    return out.strip()
+
+
 _LEVELS = {
     "Conservative": "Reword minimally — only reorder and lightly rephrase facts already "
                     "in the summary to surface the most relevant ones first. Change as "

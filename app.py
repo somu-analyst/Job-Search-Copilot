@@ -1186,6 +1186,32 @@ with t_resume:
                 st.caption("Your edit is archived as its own version — nothing is "
                            "overwritten.")
 
+            # ── "Tell it what to change" — the ChatGPT-style loop, applied to
+            # whatever's currently in the box above, not just the original draft.
+            st.markdown("**💬 Or tell it what to change**")
+            ri1, ri2 = st.columns([3, 1.2])
+            with ri1:
+                instr = st.text_input(
+                    "Instruction", key="rewrite_instruction", label_visibility="collapsed",
+                    placeholder="e.g. make this sound more senior, lead with CCAR "
+                                "experience, shorten it, less jargon…")
+            with ri2:
+                do_rewrite = st.button("✨ Rewrite", width='stretch')
+            if do_rewrite:
+                if not instr.strip():
+                    st.warning("Type what you want changed first.")
+                else:
+                    with st.spinner("Rewriting…"):
+                        new_summary = _ai.rewrite_with_instruction(edited, instr.strip())
+                    if new_summary:
+                        st.session_state["summary_editor"] = new_summary
+                        st.session_state["edited_summary"] = new_summary
+                        st.session_state.pop("critic_review", None)  # stale for the old draft
+                        st.rerun()
+                    else:
+                        st.warning("Rewrite unavailable right now (free-tier model "
+                                   "capped) — try again shortly, or edit by hand above.")
+
             ed = st.session_state.get("edited")
             if ed:
                 sc = ed["scores"]
