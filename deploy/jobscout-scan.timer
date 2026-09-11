@@ -1,0 +1,15 @@
+[Unit]
+Description=Daily tick for the Job Search Copilot scan
+Requires=jobscout-scan.service
+
+[Timer]
+# Once a day is plenty -- run.py's own aggregator-API budgeting (Adzuna/Jooble/JSearch) already
+# assumes a 2x/day cadence, so 1x/day stays well inside every free-tier quota. Deliberately NOT
+# the same hour as cloud-eod's post-close capture window, so this never competes with the
+# trading pipeline for CPU/network on a box with no spare headroom for a second instance.
+OnCalendar=*-*-* 10:00:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

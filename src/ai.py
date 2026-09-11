@@ -260,9 +260,9 @@ def _json_block(text: str) -> dict:
         return {}
 
 
-def analyze_job(url: str, title: str, company: str) -> dict:
+def analyze_job(url: str, title: str, company: str, jd_override: str = "") -> dict:
     """LLM judgment. Returns {} if no key/JD problems; caller falls back."""
-    jd = fetch_jd(url) or f"(Full JD unavailable. Job title: {title} at {company})"
+    jd = jd_override or fetch_jd(url) or f"(Full JD unavailable. Job title: {title} at {company})"
     resume = load_cv_md()
     prompt = f"""You are a bank hiring panel simulator. Evaluate this candidate's resume
 against the job. Respond with ONLY a JSON object, no prose:

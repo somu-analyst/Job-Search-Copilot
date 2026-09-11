@@ -1,0 +1,18 @@
+[Unit]
+Description=Job Search Copilot daily scan (one-shot: scrape, score, resolve apply links)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/job-search-copilot
+ExecStart=/home/ubuntu/job-search-copilot/.venv/bin/python /home/ubuntu/job-search-copilot/run.py
+
+# resolve_all() pulls whole employer job boards to find each apply link, plus link_check
+# audits every stored link -- a full run legitimately takes minutes. Generous ceiling so a
+# slow night doesn't get killed mid-run and leave a half-written jobs.db.
+TimeoutStartSec=2400
+
+[Install]
+WantedBy=multi-user.target

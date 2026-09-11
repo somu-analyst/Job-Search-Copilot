@@ -53,8 +53,8 @@ DOMAIN_DEEP = ["fraud", "aml", "bsa", "kyc", "sanctions", "ofac", "sar",
                "loss mitigation"]
 
 
-def fetch_jd(url: str) -> str:
-    """Full JD text for a Workday job URL ('' if not fetchable)."""
+def _fetch_jd_workday(url: str) -> str:
+    """Full JD text via the Workday JSON careers API ('' if not a Workday URL)."""
     try:
         u = urlparse(url)
         if "myworkdayjobs.com" not in u.netloc or "/en-US/" not in u.path:
@@ -70,6 +70,36 @@ def fetch_jd(url: str) -> str:
         return re.sub(r"<[^>]+>", " ", html)
     except Exception:
         return ""
+
+
+_JD_MAXLEN = 12000  # matches the cap db.py already applies to stored descriptions
+
+
+def fetch_jd_generic(url: str) -> str:
+    """Best-effort JD text for ANY job-posting URL ('' if not fetchable).
+    Plain page fetch + strip boilerplate — not structured like the Workday API,
+    but works for postings this pipeline never scraped (paste-a-URL flow)."""
+    try:
+        if not url or not url.lower().startswith(("http://", "https://")):
+            return ""
+        from bs4 import BeautifulSoup
+        r = requests.get(url, headers=HDR, timeout=15)
+        if r.status_code != 200 or "text/html" not in r.headers.get("Content-Type", ""):
+            return ""
+        soup = BeautifulSoup(r.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "header", "footer", "noscript"]):
+            tag.decompose()
+        text = re.sub(r"\n{3,}", "\n\n", soup.get_text("\n", strip=True))
+        return text[:_JD_MAXLEN]
+    except Exception:
+        return ""
+
+
+def fetch_jd(url: str) -> str:
+    """Full JD text for a job URL ('' if not fetchable). Tries the structured
+    Workday API first (most accurate), falls back to generic page scraping
+    for every other source."""
+    return _fetch_jd_workday(url) or fetch_jd_generic(url)
 
 
 def jd_flags(jd: str) -> dict:

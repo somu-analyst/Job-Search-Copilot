@@ -666,84 +666,145 @@ with t_resume:
 
     # Step 1 — pick a job from a real table (headers + every column, scrolls)
     with s1:
-        f1, f2, f3 = st.columns([2.2, 1.2, 1])
-        with f1:
-            pk = st.text_input("Search", placeholder="Filter by title or company…",
-                               key="pick_search", label_visibility="collapsed")
-        with f2:
-            pi = st.selectbox("Industry", ["All"] + [r[0] for r in conn.execute(
-                "SELECT DISTINCT industry FROM companies WHERE industry != '' ORDER BY 1")],
-                key="pick_ind", label_visibility="collapsed")
-        with f3:
-            pf = st.checkbox("🔥 Must-apply", key="pick_fire")
+        with st.expander("📋 Or check a job from anywhere (not in your tracker)",
+                          expanded=bool(st.session_state.get("external_job"))):
+            ext_url = st.text_input("Job posting URL", key="ext_url",
+                                     placeholder="https://…")
+            ext_jd = st.text_area("…or paste the job description text", key="ext_jd",
+                                   height=120,
+                                   placeholder="Paste the JD here if the link is behind a "
+                                               "login or the page won't fetch cleanly.")
+            ec1, ec2, ec3 = st.columns([1.4, 1.4, 1])
+            with ec1:
+                ext_title = st.text_input("Job title (optional)", key="ext_title")
+            with ec2:
+                ext_company = st.text_input("Company (optional)", key="ext_company")
+            with ec3:
+                st.write("")
+                go = st.button("Analyze this job", width='stretch', type="primary")
+            if go:
+                if not (ext_url.strip() or ext_jd.strip()):
+                    st.warning("Paste a URL or the job description text first.")
+                else:
+                    with st.spinner("Fetching the job description…"):
+                        jd_resolved = ext_jd.strip() or jd_match.fetch_jd(ext_url.strip())
+                    st.session_state["external_job"] = {
+                        "url": ext_url.strip() or f"pasted:{abs(hash(ext_jd.strip()))}",
+                        "title": ext_title.strip() or "(pasted job)",
+                        "company": ext_company.strip(),
+                        "description": jd_resolved,
+                    }
+                    st.session_state["step_now"] = 2
+                    st.rerun()
+            if st.session_state.get("external_job"):
+                if st.button("✕ Clear this pasted job — back to my tracker", key="ext_clear"):
+                    st.session_state.pop("external_job", None)
+                    st.rerun()
 
-        pq = """SELECT jobs.url, jobs.title, jobs.company, jobs.score, jobs.location,
-                       jobs.source, COALESCE(jobs.salary,'') salary,
-                       COALESCE(jobs.description,'') description,
-                       COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
-                       COALESCE(jobs.apply_kind,'') apply_kind,
-                       COALESCE(jobs.tags,'') tags,
-                       COALESCE(companies.industry,'') industry, jobs.status
-                FROM jobs LEFT JOIN companies ON jobs.company = companies.name
-                WHERE jobs.status NOT IN ('skip','stale','rejected')"""
-        pp = []
-        if pk:
-            pq += " AND (LOWER(jobs.title) LIKE ? OR LOWER(jobs.company) LIKE ?)"
-            pp += [f"%{pk.lower()}%"] * 2
-        if pi != "All":
-            pq += " AND companies.industry = ?"; pp.append(pi)
-        if pf:
-            pq += f" AND jobs.score >= {MUST_APPLY_AT}"
-        pq += " ORDER BY jobs.score DESC, jobs.date_found DESC LIMIT 300"
-        jp = load(pq, pp)
+        ext = st.session_state.get("external_job")
+        if ext:
+            from src.score import score_title
+            job = pd.Series({
+                "url": ext["url"], "title": ext["title"], "company": ext["company"],
+                "location": "", "source": "pasted", "salary": "",
+                "description": ext["description"],
+                "apply_url": ext["url"] if ext["url"].startswith("http") else "",
+                "apply_kind": "", "tags": "", "industry": "", "status": "new",
+                "score": score_title(ext["title"], ext["company"]),
+            })
+            st.session_state["picked_url"] = job["url"]
+            st.session_state["step_now"] = 2
+            ui.job_card(job["title"], job["company"], job["location"], job["score"],
+                        industry=job["industry"], salary=job["salary"], source=job["source"])
+            if job["apply_url"]:
+                st.link_button("↗ Original posting", job["apply_url"], width='stretch')
+            st.caption("Pasted job — not saved to your tracker. Move to **2 · Fit scores** above. →")
+        else:
+            f1, f2, f3 = st.columns([2.2, 1.2, 1])
+            with f1:
+                pk = st.text_input("Search", placeholder="Filter by title or company…",
+                                   key="pick_search", label_visibility="collapsed")
+            with f2:
+                pi = st.selectbox("Industry", ["All"] + [r[0] for r in conn.execute(
+                    "SELECT DISTINCT industry FROM companies WHERE industry != '' ORDER BY 1")],
+                    key="pick_ind", label_visibility="collapsed")
+            with f3:
+                pf = st.checkbox("🔥 Must-apply", key="pick_fire")
 
-        if jp.empty:
-            ui.empty("🔍", "No jobs match", "Loosen the filters or run a scan.")
-            st.stop()
+            pq = """SELECT jobs.url, jobs.title, jobs.company, jobs.score, jobs.location,
+                           jobs.source, COALESCE(jobs.salary,'') salary,
+                           COALESCE(jobs.description,'') description,
+                           COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
+                           COALESCE(jobs.apply_kind,'') apply_kind,
+                           COALESCE(jobs.tags,'') tags,
+                           COALESCE(companies.industry,'') industry, jobs.status
+                    FROM jobs LEFT JOIN companies ON jobs.company = companies.name
+                    WHERE jobs.status NOT IN ('skip','stale','rejected')"""
+            pp = []
+            if pk:
+                pq += " AND (LOWER(jobs.title) LIKE ? OR LOWER(jobs.company) LIKE ?)"
+                pp += [f"%{pk.lower()}%"] * 2
+            if pi != "All":
+                pq += " AND companies.industry = ?"; pp.append(pi)
+            if pf:
+                pq += f" AND jobs.score >= {MUST_APPLY_AT}"
+            pq += " ORDER BY jobs.score DESC, jobs.date_found DESC LIMIT 300"
+            jp = load(pq, pp)
 
-        # A job ticked 📄 in Today/Jobs/Applied lands here already chosen. Streamlit
-        # can't preselect a dataframe row, so instead it becomes the DEFAULT when
-        # you haven't clicked one — same outcome, no lie about what's selected.
-        # Matched on url, not row index: any filter change invalidates an index.
-        rs_url = st.session_state.get("rs_url")
-        default_row = 0
-        if rs_url is not None and (jp["url"] == rs_url).any():
-            default_row = int(jp.index.get_indexer(jp.index[jp["url"] == rs_url])[0])
-        elif rs_url:
-            st.info("The job you ticked 📄 isn't in this list — clear the filters "
-                    "above to see it.")
+            if jp.empty:
+                ui.empty("🔍", "No jobs match", "Loosen the filters or run a scan.")
+                st.stop()
 
-        st.caption(f"**{len(jp)} jobs** — click a row to select it. "
-                   "Headers stay put while you scroll.")
-        grid = jp.copy()
-        grid["🔥"] = (jp["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
-        grid["link"] = jp["apply_kind"].map(lambda k: _LINK_BADGE.get(k, "·"))
-        grid["tailor"] = False
-        grid["location"] = jp["location"].map(short_loc)
-        # Same column order as every other table. `tailor` is dropped: you are
-        # already IN Resume Studio, so a button that sends you here is noise.
-        pcols = [c for c in JOB_COLS if c != "tailor"]
-        ev = st.dataframe(
-            grid[pcols], hide_index=True, height=260, width='stretch',
-            on_select="rerun", selection_mode="single-row",
-            column_config=job_columns(), key="pick_grid")
-        rows = ev.selection.rows if ev and ev.selection else []
-        job = jp.iloc[rows[0] if rows else default_row]
-        st.session_state["picked_url"] = job["url"]
-        st.session_state["step_now"] = 2
+            # A job ticked 📄 in Today/Jobs/Applied lands here already chosen. Streamlit
+            # can't preselect a dataframe row, so instead it becomes the DEFAULT when
+            # you haven't clicked one — same outcome, no lie about what's selected.
+            # Matched on url, not row index: any filter change invalidates an index.
+            rs_url = st.session_state.get("rs_url")
+            default_row = 0
+            if rs_url is not None and (jp["url"] == rs_url).any():
+                default_row = int(jp.index.get_indexer(jp.index[jp["url"] == rs_url])[0])
+            elif rs_url:
+                st.info("The job you ticked 📄 isn't in this list — clear the filters "
+                        "above to see it.")
 
-        ui.job_card(job["title"], job["company"], job["location"], job["score"],
-                    industry=job["industry"], salary=job["salary"], source=job["source"])
-        b1, b2, _ = st.columns([1.2, 1.2, 2.6])
-        with b1:
-            st.link_button("✅ Apply on employer site", job["apply_url"],
-                           width='stretch', type="primary")
-        with b2:
-            st.link_button("↗ Original posting", job["url"], width='stretch')
-        st.caption("Selected. Move to **2 · Fit scores** above. →")
+            st.caption(f"**{len(jp)} jobs** — click a row to select it. "
+                       "Headers stay put while you scroll.")
+            grid = jp.copy()
+            grid["🔥"] = (jp["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
+            grid["link"] = jp["apply_kind"].map(lambda k: _LINK_BADGE.get(k, "·"))
+            grid["tailor"] = False
+            grid["location"] = jp["location"].map(short_loc)
+            # Same column order as every other table. `tailor` is dropped: you are
+            # already IN Resume Studio, so a button that sends you here is noise.
+            pcols = [c for c in JOB_COLS if c != "tailor"]
+            ev = st.dataframe(
+                grid[pcols], hide_index=True, height=260, width='stretch',
+                on_select="rerun", selection_mode="single-row",
+                column_config=job_columns(), key="pick_grid")
+            rows = ev.selection.rows if ev and ev.selection else []
+            job = jp.iloc[rows[0] if rows else default_row]
+            st.session_state["picked_url"] = job["url"]
+            st.session_state["step_now"] = 2
+
+            ui.job_card(job["title"], job["company"], job["location"], job["score"],
+                        industry=job["industry"], salary=job["salary"], source=job["source"])
+            b1, b2, _ = st.columns([1.2, 1.2, 2.6])
+            with b1:
+                st.link_button("✅ Apply on employer site", job["apply_url"],
+                               width='stretch', type="primary")
+            with b2:
+                st.link_button("↗ Original posting", job["url"], width='stretch')
+            st.caption("Selected. Move to **2 · Fit scores** above. →")
 
     # JD + screening (shared by steps 2-4)
-    jd_text = jd_match.fetch_jd(job["url"]) or (job.get("description") or "")
+    _ext_active = st.session_state.get("external_job")
+    if _ext_active and job["url"] == _ext_active["url"]:
+        # Already resolved in Step 1 (pasted text wins over a live re-fetch there) —
+        # re-fetching here would silently discard a deliberate paste in favor of
+        # whatever the URL currently serves.
+        jd_text = _ext_active["description"]
+    else:
+        jd_text = jd_match.fetch_jd(job["url"]) or (job.get("description") or "")
     flags = jd_match.jd_flags(jd_text)
 
     # Step 2 — fit scores
@@ -792,6 +853,34 @@ with t_resume:
                             f"line-height:1.6'>{jd_text}</div>", unsafe_allow_html=True)
             else:
                 st.info("This source doesn't publish the JD — use ↗ Original posting.")
+
+        st.markdown("---")
+        st.markdown("**🤖 AI deep-dive** — reads *meaning*, not just keywords ($0, free-tier model).")
+        from src import ai as _ai
+        with st.spinner("Reading the JD like a hiring panel would…"):
+            deep = _ai.analyze_job(job["url"], job["title"], job["company"], jd_override=jd_text)
+        if deep:
+            d1, d2 = st.columns([1, 3])
+            d1.metric("AI fit", f"{deep.get('score_10', '—')}/10")
+            with d2:
+                st.write(f"**Recruiter read:** {deep.get('recruiter_view', '—')}")
+                st.write(f"**Hiring-manager read:** {deep.get('hiring_manager_view', '—')}")
+            a1, a2 = st.columns(2)
+            with a1:
+                st.markdown("**Strengths**")
+                for s in deep.get("strengths", []) or ["—"]:
+                    st.write(f"- {s}")
+            with a2:
+                st.markdown("**Gaps**")
+                for g in deep.get("gaps", []) or ["—"]:
+                    st.write(f"- {g}")
+            if deep.get("resume_tweaks"):
+                st.markdown("**Concrete resume tweaks for this job**")
+                for t in deep["resume_tweaks"]:
+                    st.write(f"- {t}")
+        else:
+            st.caption("⚠ AI deep-dive unavailable right now (free-tier model capped or no "
+                       "key configured) — the keyword scores above still stand on their own.")
 
     # Step 3 — build several versions, compare, edit, archive
     with s3:
