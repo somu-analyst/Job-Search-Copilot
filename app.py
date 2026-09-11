@@ -1135,11 +1135,37 @@ with t_resume:
                         rows.append((s.get("text", ""), facts))
                     ui.citation_list(rows)
 
-            # ── User edits the summary, then re-scores ──
-            st.markdown("**✏️ Edit before you send** — your words always win.")
+            # ── Critic review — a blunt editor's pass, right before you edit ──
             start = st.session_state.get("edited_summary") or chosen["summary"] \
                 or vs[0]["resume_md"].split("## Professional Summary")[-1]\
                                      .split("##")[0].strip()
+            with st.container(border=True):
+                cr1, cr2 = st.columns([1.4, 2.6])
+                with cr1:
+                    get_crit = st.button("🔍 Get a critic's review", width='stretch')
+                with cr2:
+                    st.caption("A blunt editor's pass on the summary below — specific "
+                               "problems, not encouragement. Read it, then edit.")
+                if get_crit:
+                    with st.spinner("Reviewing like a tough editor would…"):
+                        crit = _ai.critique_summary(start, jd_text, job["title"],
+                                                    job["company"])
+                    st.session_state["critic_review"] = crit
+                crit = st.session_state.get("critic_review")
+                if crit is not None:
+                    if crit.get("issues"):
+                        for issue in crit["issues"]:
+                            st.warning(issue)
+                    elif crit:
+                        st.success("No specific issues found — reads solid.")
+                    if crit.get("verdict"):
+                        st.info(f"**Verdict:** {crit['verdict']}")
+                    if not crit:
+                        st.caption("⚠ Critic review unavailable right now (free-tier "
+                                   "model capped) — edit by eye below instead.")
+
+            # ── User edits the summary, then re-scores ──
+            st.markdown("**✏️ Edit before you send** — your words always win.")
             edited = st.text_area("Professional Summary", value=start, height=170,
                                   key="summary_editor",
                                   help="Rewrite freely. Re-score to see what your "

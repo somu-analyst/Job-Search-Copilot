@@ -299,6 +299,31 @@ RESUME:
     return _json_block(_chat(prompt))
 
 
+def critique_summary(summary: str, jd_text: str, title: str, company: str) -> dict:
+    """A tough editor's pass on ONE Professional Summary draft -- specific
+    problems, not a rubber stamp. Returns {} if the free tier is capped;
+    caller shows a graceful "unavailable" state, same pattern as analyze_job."""
+    if not (summary or "").strip():
+        return {}
+    prompt = f"""You are a blunt, experienced resume editor reviewing ONE
+Professional Summary draft for a specific job. Be specific and critical, not
+encouraging by default -- vague praise doesn't help anyone. Respond with
+ONLY this JSON:
+{{"issues": ["<specific problem: awkward phrasing, weak/generic claim, missing
+   impact/number, redundant with the rest of the resume, reads unnatural,
+   etc. -- quote the exact phrase you mean>"],
+ "verdict": "<one honest sentence: is this ready to send, or not yet, and why>"}}
+If it's genuinely solid, return an empty issues list -- do not invent a
+problem just to have one.
+
+JOB ({title} at {company}):
+{(jd_text or '')[:3000]}
+
+DRAFT SUMMARY:
+{summary}"""
+    return _json_block(_chat(prompt, max_tokens=600))
+
+
 _LEVELS = {
     "Conservative": "Reword minimally — only reorder and lightly rephrase facts already "
                     "in the summary to surface the most relevant ones first. Change as "
