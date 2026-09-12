@@ -20,3 +20,9 @@ rank_bm25>=0.2.2      # ATS scoring: proper term-saturation-aware relevance (src
 sentence-transformers>=3.0   # ATS scoring: local semantic similarity (catches paraphrasing
                       # keyword/BM25 matching can't -- "financial crime" vs "fraud/AML").
                       # Pulls in torch; CPU-only inference on a small model, no API/tokens.
+pip-system-certs>=4.0 # Windows: Python's bundled cert store doesn't trust whatever's
+                      # intercepting HTTPS here (AV/corporate inspection) even though the OS
+                      # store does -- without this, sentence-transformers' one-time model
+                      # download from huggingface.co fails with CERTIFICATE_VERIFY_FAILED
+                      # every time, silently falling back to a neutral score. Makes Python
+                      # use the OS trust store instead of certifi's bundled list.

@@ -1012,17 +1012,24 @@ with t_resume:
         fit = jd_match.analyze(job["url"], job["title"], jd_override=jd_text,
                                resume_override=resume_override_text)
 
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Recruiter", f"{fit['recruiter']}/10",
                   help="The 6-second skim: does the TITLE and headline echo your resume?")
         m2.metric("ATS / Workday", f"{fit['ats']}/10",
-                  help="Keyword coverage — what the automated filter counts.")
+                  help="BM25 keyword relevance (term-frequency-saturating, not naive "
+                       "substring presence) — the closest proxy to what an automated "
+                       "filter actually scores.")
         m3.metric("Hiring manager", f"{fit['hiring_manager']}/10",
                   help="Domain depth + quantified achievements.")
-        m4.metric("Overall", f"{fit['overall']}/10")
-        st.caption("The 4 above are literal **keyword** proxies. The **AI deep-dive** "
-                   "below reads *meaning* and usually scores transferable fits higher — "
-                   "trust it when they disagree.")
+        m4.metric("Semantic", f"{fit['semantic']}/10",
+                  help="Local embedding similarity — catches JD requirements your resume "
+                       "satisfies in DIFFERENT words (e.g. 'financial crime prevention' vs "
+                       "'fraud/AML detection'), which the keyword score structurally can't "
+                       "see. Runs on-device, no network call.")
+        m5.metric("Overall", f"{fit['overall']}/10")
+        st.caption("Recruiter/ATS/Hiring-manager are keyword-and-structure proxies; "
+                   "Semantic is a real (if local, not LLM-graded) meaning-match. The "
+                   "**AI deep-dive** below goes further still — trust it when they disagree.")
         if not fit["jd_available"]:
             st.caption("⚠ Full JD not published by this source — scored from the title only.")
 
@@ -1031,8 +1038,16 @@ with t_resume:
             st.markdown("**✅ Highlights — JD asks, you have**")
             st.write(", ".join(fit["highlights"]) or "—")
         with g2:
-            st.markdown("**❌ Missing — JD asks, resume lacks**")
+            st.markdown("**❌ Missing — JD asks, resume lacks (by keyword)**")
             st.write(", ".join(fit["missing"]) or "Nothing — full coverage!")
+        if fit.get("semantic_gaps"):
+            with st.expander("🔎 Also missing in MEANING, not just spelling "
+                             f"({len(fit['semantic_gaps'])})"):
+                st.caption("JD requirements your resume doesn't clearly satisfy even "
+                           "allowing for different wording — worth a genuine look, not "
+                           "just a keyword to sprinkle in.")
+                for g in fit["semantic_gaps"]:
+                    st.caption("• " + g)
 
         add_kw = []
         if fit["missing"]:

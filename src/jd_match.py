@@ -203,6 +203,94 @@ def _hits(text: str, vocab: list[str]) -> set:
     return {k for k in vocab if k.strip() and f" {k.strip()} " in t or k in text.lower()}
 
 
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9+.#]+", text.lower())
+
+
+def _resume_documents(resume_text: str) -> list[str]:
+    """Split the resume into independently-scoreable units (bullets + the
+    summary paragraph) instead of treating it as one blob -- both BM25 and
+    the embedding similarity below need per-unit documents to find the BEST
+    matching piece of the resume for each JD requirement, not an average
+    over the whole thing."""
+    docs = re.findall(r"^-\s+(.+)$", resume_text, re.M)
+    m = re.search(r"## Professional Summary\s*\n(.+?)\n## ", resume_text, re.S | re.I)
+    if m:
+        docs.append(m.group(1).strip())
+    return [d for d in docs if d.strip()]
+
+
+def bm25_coverage(jd_terms: set, resume_text: str) -> float:
+    """0..1 coverage using BM25 (term-frequency-saturating, document-length-
+    normalized relevance) instead of naive substring presence -- the same
+    algorithm real search/retrieval systems use, and a real step up from
+    "does this string appear anywhere." Falls back to naive coverage if
+    rank_bm25 isn't installed, rather than hard-failing the whole score."""
+    if not jd_terms:
+        return 0.5
+    try:
+        from rank_bm25 import BM25Okapi
+    except ImportError:
+        return sum(1 for k in jd_terms if k.strip() in resume_text) / len(jd_terms)
+    docs = _resume_documents(resume_text)
+    if not docs:
+        return 0.0
+    bm25 = BM25Okapi([_tokenize(d) for d in docs])
+    covered = sum(1 for term in jd_terms if max(bm25.get_scores(_tokenize(term))) > 0)
+    return covered / len(jd_terms)
+
+
+_EMBED_MODEL = None
+SEMANTIC_SIM_THRESHOLD = 0.45   # cosine similarity above which two phrases count as "related"
+
+
+def _embed_model():
+    """Lazy singleton -- loading the model takes ~1-2s once, then it's cached
+    for the life of the process (Streamlit keeps the process alive across
+    reruns, so this only pays once per app run, not once per score)."""
+    global _EMBED_MODEL
+    if _EMBED_MODEL is None:
+        from sentence_transformers import SentenceTransformer
+        _EMBED_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+    return _EMBED_MODEL
+
+
+def _extract_requirements(jd_text: str, max_n: int = 24) -> list[str]:
+    """JD text -> a list of requirement-sized phrases (bullet lines / sentences)
+    for the embedding layer to compare against -- semantic similarity needs
+    phrase-level meaning, not single keywords, to catch paraphrasing
+    ("financial crime prevention" vs "fraud/AML detection")."""
+    parts = re.split(r"[\n•·]+|(?<=[.!?])\s+(?=[A-Z])", jd_text)
+    parts = [p.strip(" -•·\t") for p in parts]
+    parts = [p for p in parts if 15 <= len(p) <= 220]
+    return parts[:max_n]
+
+
+def semantic_coverage(jd_text: str, resume_text: str) -> tuple[float, list[str]]:
+    """0..1 coverage using embedding cosine similarity -- catches JD
+    requirements the resume satisfies in different WORDS, which BM25/keyword
+    matching structurally cannot (it only ever sees spelling, never meaning).
+    Returns (coverage, [requirement phrases NOT matched]) so the caller can
+    show what's actually semantically missing, same shape as `missing` above.
+    Returns (0.5, []) gracefully if sentence-transformers isn't available or
+    the JD has nothing extractable -- never hard-fails the whole score."""
+    try:
+        model = _embed_model()
+    except Exception:
+        return 0.5, []
+    reqs = _extract_requirements(jd_text)
+    docs = _resume_documents(resume_text)
+    if not reqs or not docs:
+        return 0.5, []
+    doc_emb = model.encode(docs, convert_to_numpy=True, normalize_embeddings=True)
+    req_emb = model.encode(reqs, convert_to_numpy=True, normalize_embeddings=True)
+    sims = req_emb @ doc_emb.T   # cosine similarity since both are L2-normalized
+    best = sims.max(axis=1)
+    covered = int((best >= SEMANTIC_SIM_THRESHOLD).sum())
+    gaps = [reqs[i] for i in range(len(reqs)) if best[i] < SEMANTIC_SIM_THRESHOLD]
+    return covered / len(reqs), gaps[:8]   # cap gaps shown -- a long JD can have many
+
+
 def analyze(url: str, title: str, resume_override: str = "", jd_override: str = "") -> dict:
     jd = jd_override or fetch_jd(url)
     resume = resume_override.lower() if resume_override else _resume_text()
@@ -211,7 +299,10 @@ def analyze(url: str, title: str, resume_override: str = "", jd_override: str = 
     jd_skills = _hits(jd, SKILLS) if jd else _hits(title, SKILLS)
     have = {k for k in jd_skills if k.strip() in resume}
     missing = sorted(jd_skills - have)
-    coverage = len(have) / len(jd_skills) if jd_skills else 0.5   # 0..1
+    # BM25 replaces naive substring presence for the ATS score itself -- a
+    # properly-weighted relevance algorithm, not "does this string appear."
+    coverage = bm25_coverage(jd_skills, resume) if jd_skills else 0.5   # 0..1
+    semantic, semantic_gaps = semantic_coverage(jd, resume) if jd.strip() else (0.5, [])
 
     # broad title-word overlap with the resume (not just tech tokens)
     stop = {"and", "the", "of", "for", "senior", "lead", "analyst", "manager",
@@ -230,14 +321,17 @@ def analyze(url: str, title: str, resume_override: str = "", jd_override: str = 
     ats = 2 + 8 * coverage
     recruiter = 2 + 8 * (0.55 * title_overlap + 0.45 * coverage)
     hm = 2 + 8 * (0.6 * deep_cov + 0.4 * metrics)
-    overall = 0.35 * ats + 0.3 * recruiter + 0.35 * hm
+    semantic_10 = 2 + 8 * semantic
+    overall = 0.3 * ats + 0.22 * recruiter + 0.28 * hm + 0.2 * semantic_10
 
     out.update({
         "ats": round(min(10, ats), 1),
         "recruiter": round(min(10, recruiter), 1),
         "hiring_manager": round(min(10, hm), 1),
+        "semantic": round(min(10, semantic_10), 1),
         "overall": round(min(10, overall), 1),
         "highlights": sorted(have),
         "missing": missing,
+        "semantic_gaps": semantic_gaps,
     })
     return out
