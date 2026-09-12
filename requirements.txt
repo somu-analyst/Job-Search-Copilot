@@ -12,4 +12,11 @@ google-auth-oauthlib>=1.2
 xhtml2pdf>=0.2.16     # resume PDF download (src/resume.py:tailored_resume_pdf) -- pure
                       # Python, no external binary, so it works the same on the VM
 python-docx>=1.1.0    # resume .docx download (tailored_resume_docx)
-htmldocx>=0.0.9       # converts the resume's HTML+CSS straight to .docx
+htmldocx>=0.0.6       # converts the resume's HTML+CSS straight to .docx -- 0.0.9 doesn't
+                      # exist on PyPI (max release is 0.0.6); the old >=0.0.9 pin was never
+                      # actually satisfiable, just unnoticed because it was already installed
+rank_bm25>=0.2.2      # ATS scoring: proper term-saturation-aware relevance (src/jd_match.py),
+                      # not naive substring counting. Pure Python, no heavy deps.
+sentence-transformers>=3.0   # ATS scoring: local semantic similarity (catches paraphrasing
+                      # keyword/BM25 matching can't -- "financial crime" vs "fraud/AML").
+                      # Pulls in torch; CPU-only inference on a small model, no API/tokens.
