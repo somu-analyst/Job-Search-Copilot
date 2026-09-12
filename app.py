@@ -840,6 +840,26 @@ with t_resume:
                         key="pick_co")
                     psource_f = st.multiselect("Source", [r[0] for r in conn.execute(
                         "SELECT DISTINCT source FROM jobs")], key="pick_src")
+                    # Same 3 filters Today/Jobs/Applied have via job_board() —
+                    # this picker is hand-built (it needs single-row selection,
+                    # not job_board's editor), so it had quietly fallen behind
+                    # with a hardcoded status exclusion and no date filters
+                    # (reported live). Default mirrors the old hardcoded
+                    # behavior (hide skip/stale/rejected) but is now visible
+                    # and adjustable, same as everywhere else.
+                    pstatus_f = st.multiselect(
+                        "Status", db.STATUSES,
+                        default=[s for s in db.STATUSES
+                                if s not in ("skip", "stale", "rejected")],
+                        key="pick_status")
+                    pdc1, pdc2 = st.columns(2)
+                    with pdc1:
+                        page_f = st.selectbox("Pulled", list(AGE_OPTS), key="pick_age")
+                    with pdc2:
+                        pposted_f = st.selectbox(
+                            "Posted", list(AGE_OPTS), key="pick_posted",
+                            help="Source's own posted date; jobs with no date "
+                                 "always pass")
 
             pq = """SELECT jobs.url, jobs.title, jobs.company, jobs.score, jobs.location,
                            jobs.source, COALESCE(jobs.salary,'') salary,
@@ -847,9 +867,10 @@ with t_resume:
                            COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
                            COALESCE(jobs.apply_kind,'') apply_kind,
                            COALESCE(jobs.tags,'') tags,
-                           COALESCE(companies.industry,'') industry, jobs.status
+                           COALESCE(companies.industry,'') industry, jobs.status,
+                           jobs.date_posted, jobs.date_found
                     FROM jobs LEFT JOIN companies ON jobs.company = companies.name
-                    WHERE jobs.status NOT IN ('skip','stale','rejected')"""
+                    WHERE 1=1"""
             pp = []
             if pk:
                 pq += " AND (LOWER(jobs.title) LIKE ? OR LOWER(jobs.company) LIKE ?)"
@@ -874,8 +895,20 @@ with t_resume:
             if psource_f:
                 pq += f" AND jobs.source IN ({','.join('?'*len(psource_f))})"
                 pp += psource_f
+            if pstatus_f:
+                pq += f" AND jobs.status IN ({','.join('?'*len(pstatus_f))})"
+                pp += pstatus_f
+            page_days = AGE_OPTS[page_f]
+            if page_days is not None:
+                pq += " AND jobs.date_found >= date('now', ?)"
+                pp.append(f"-{page_days} days")
             pq += " ORDER BY jobs.score DESC, jobs.date_found DESC LIMIT 300"
             jp = load(pq, pp)
+
+            pposted_max = AGE_OPTS[pposted_f]
+            if pposted_max is not None and not jp.empty:
+                _d = jp["date_posted"].map(posted_days_ago)
+                jp = jp[(_d.isna()) | (_d <= pposted_max)].reset_index(drop=True)
 
             if jp.empty:
                 ui.empty("🔍", "No jobs match", "Loosen the filters or run a scan.")
@@ -1285,6 +1318,42 @@ with t_resume:
                 st.download_button("⬇ Resume (.html, editable source)", html_doc,
                                    f"resume-{_co_slug}.html",
                                    "text/html", width='stretch')
+
+                # Genuine one-pager: unlike the Compact checkbox above (tighter
+                # type only — a long history can still run past one page), this
+                # actually trims bullets (JD-least-relevant first, Awards/
+                # Projects first, never touching Summary/Skills/Education) AND
+                # renders at a tighter density, re-checking real PDF page count
+                # each round — an explicit button, not auto-run, since it
+                # re-renders the PDF several times in a loop.
+                _op_key = f"one_pager::{job['url']}::{hash(final_summary)}"
+                if st.button("📄 Build a TRUE one-page PDF (trims content to fit)",
+                             width='stretch'):
+                    with st.spinner("Trimming and re-checking page count…"):
+                        op_bytes, op_trimmed, op_fits = rz.one_page_resume(
+                            job["title"], job["company"], jd_text,
+                            summary_override=final_summary)
+                    st.session_state[_op_key] = (op_bytes, op_trimmed, op_fits)
+                if _op_key in st.session_state:
+                    op_bytes, op_trimmed, op_fits = st.session_state[_op_key]
+                    if op_fits:
+                        st.success("Fits on one page." + (
+                            f" Trimmed {len(op_trimmed)} lowest-priority bullet(s) "
+                            f"to get there." if op_trimmed else " Nothing had to "
+                            "be cut."))
+                    else:
+                        st.warning(f"Still 2 pages even trimmed to the floor and "
+                                   f"tightest type ({len(op_trimmed)} bullets cut) "
+                                   f"— this history is genuinely too long for one "
+                                   f"page without dropping a whole role.")
+                    if op_trimmed:
+                        with st.expander(f"What got cut ({len(op_trimmed)})"):
+                            for t in op_trimmed:
+                                st.caption("✂ " + t)
+                    st.download_button("⬇ One-page resume (.pdf)", op_bytes,
+                                       f"resume-{_co_slug}-1page.pdf",
+                                       "application/pdf", width='stretch',
+                                       key="dl_one_pager")
                 st.download_button("⬇ Cover letter (.txt)",
                                    rz.cover_letter(job["title"], job["company"]),
                                    "cover-letter.txt", "text/plain",
