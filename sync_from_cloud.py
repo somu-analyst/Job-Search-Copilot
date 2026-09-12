@@ -66,9 +66,31 @@ def _fetch_remote_snapshot() -> bool:
         return False
 
 
+def trigger_remote_scan(timeout: int = 8) -> bool:
+    """Fire-and-forget: starts the cloud scan service and returns immediately
+    -- a full scan takes many minutes, so the caller (the sidebar button)
+    should NOT block waiting for it. Returns False if the VM isn't reachable
+    within `timeout`s, so the caller can fall back to a local scan instead."""
+    try:
+        subprocess.run(
+            ["ssh", "-i", VM_KEY, "-o", "StrictHostKeyChecking=no",
+             "-o", f"ConnectTimeout={timeout}", VM_HOST,
+             "sudo systemctl start jobscout-scan.service"],
+            check=True, timeout=timeout + 5,
+        )
+        return True
+    except Exception:
+        return False
+
+
 def merge(dry_run: bool = False) -> None:
+    """Raises RuntimeError on an unreachable VM -- NOT sys.exit(). This is
+    called both from the CLI (__main__ below, where sys.exit is fine) and
+    from the Streamlit app's sidebar button, where sys.exit(1) would raise
+    SystemExit and take the whole running server down, not just show an
+    error in the UI (caught live before it shipped)."""
     if not _fetch_remote_snapshot():
-        sys.exit(1)
+        raise RuntimeError("Could not reach the cloud VM")
 
     conn = db.connect()
     db.init(conn)   # make sure the local schema is current before attaching
@@ -96,7 +118,9 @@ def merge(dry_run: bool = False) -> None:
             f"SELECT {ccols} FROM cloud.companies WHERE name NOT IN (SELECT name FROM companies)"
         )
         conn.commit()
-        print(f"[sync] merged. Local DB now has {db.counts(conn)['jobs']} jobs.")
+        total = db.counts(conn)["jobs"]
+        db.record_scan("cloud sync", new_jobs, total)
+        print(f"[sync] merged. Local DB now has {total} jobs.")
     else:
         print("[sync] --dry-run: nothing written")
 
@@ -106,4 +130,8 @@ def merge(dry_run: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    merge(dry_run="--dry-run" in sys.argv)
+    try:
+        merge(dry_run="--dry-run" in sys.argv)
+    except RuntimeError as e:
+        print(f"[sync] {e} -- skipping this run")
+        sys.exit(1)

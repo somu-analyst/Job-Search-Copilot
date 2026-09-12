@@ -39,6 +39,32 @@ def today() -> str:
     return datetime.now().strftime("%Y-%m-%d")
 
 
+LAST_SCAN_PATH = Path(__file__).resolve().parent.parent / "data" / "last_scan.json"
+
+
+def record_scan(source: str, new_jobs: int, total_jobs: int) -> None:
+    """Written by run.py (source='local'), sync_from_cloud.py (source='cloud
+    sync'), and the sidebar's cloud-trigger button (source='cloud') -- one
+    state file, read instantly by the UI with no network call, so "when did
+    this last actually run" doesn't require SSHing the VM just to render a
+    status line."""
+    import json
+    LAST_SCAN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LAST_SCAN_PATH.write_text(json.dumps({
+        "when": now(), "source": source, "new_jobs": new_jobs, "total_jobs": total_jobs,
+    }), encoding="utf-8")
+
+
+def last_scan() -> dict | None:
+    import json
+    if not LAST_SCAN_PATH.exists():
+        return None
+    try:
+        return json.loads(LAST_SCAN_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     # A scan/resolve runs for minutes while the Streamlit app has the same file

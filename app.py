@@ -564,28 +564,73 @@ with st.sidebar:
     st.subheader("⚡ Run a scan")
     st.caption("Scrape → filter → dedupe → score → sponsor-tag → resolve apply "
                "links. Token-free.")
+
+    _last = db.last_scan()
+    if _last:
+        st.caption(f"🕐 Last refresh: **{_last['when']}** ({_last['source']}) — "
+                   f"+{_last['new_jobs']} jobs ({_last['total_jobs']:,} total)")
+    else:
+        st.caption("🕐 No refresh recorded yet.")
+
     if st.button("⚡ Quick — Workday employers", width='stretch'):
         from src import scrape_workday
         with st.status("Scanning employer Workday APIs…", expanded=True) as s:
             n = scrape_workday.run(conn, verbose=False)
             st.write(f"Workday: **+{n}** new")
             _post_process()
+            db.record_scan("local", n, db.counts(conn)["jobs"])
             s.update(label=f"Done — +{n} new jobs", state="complete")
         st.rerun()
-    if st.button("🌐 Full — all sources", width='stretch'):
-        from src import scrape_boards, scrape_workday, scrape_apis
-        with st.status("Full scan — keep this tab open…", expanded=True) as s:
-            st.write("1/3 Job boards…")
-            nb = scrape_boards.run(conn, verbose=False)
-            st.write(f"Boards: **+{nb}**")
-            st.write("2/3 Workday employer APIs…")
-            nw = scrape_workday.run(conn, verbose=False)
-            st.write(f"Workday: **+{nw}**")
-            st.write("3/3 Aggregator APIs…")
-            na = scrape_apis.run(conn, verbose=False)
-            st.write(f"APIs: **+{na}**")
-            _post_process()
-            s.update(label=f"Done — +{nb+nw+na} new jobs", state="complete")
+
+    if st.button("🌐 Full scan (cloud, falls back to local)", width='stretch',
+                 help="Triggers the scan on the Oracle VM (fast to click — doesn't "
+                      "block this window for the full run) and syncs whatever's "
+                      "already there. If the VM isn't reachable, runs the full scan "
+                      "right here instead, same as before."):
+        from sync_from_cloud import trigger_remote_scan, merge as cloud_merge
+        with st.status("Reaching the cloud scanner…", expanded=True) as s:
+            if trigger_remote_scan():
+                s.write("☁️ Cloud scan started on the VM (usually ~10-20 min).")
+                s.write("Pulling in whatever was already there since the last sync…")
+                try:
+                    cloud_merge()
+                    s.write("Synced. Click **🔄 Sync from cloud now** below again "
+                            "once the cloud scan finishes to get its results.")
+                    s.update(label="Cloud scan started — synced existing data",
+                             state="complete")
+                except Exception as e:
+                    s.write(f"Sync step failed ({e}), but the cloud scan is still "
+                            "running remotely.")
+                    s.update(label="Cloud scan started (sync failed, will retry later)",
+                             state="complete")
+            else:
+                s.write("☁️ Cloud unreachable — running the full scan locally instead.")
+                from src import scrape_boards, scrape_workday, scrape_apis
+                s.write("1/3 Job boards…")
+                nb = scrape_boards.run(conn, verbose=False)
+                s.write(f"Boards: **+{nb}**")
+                s.write("2/3 Workday employer APIs…")
+                nw = scrape_workday.run(conn, verbose=False)
+                s.write(f"Workday: **+{nw}**")
+                s.write("3/3 Aggregator APIs…")
+                na = scrape_apis.run(conn, verbose=False)
+                s.write(f"APIs: **+{na}**")
+                _post_process()
+                db.record_scan("local (cloud unreachable)", nb + nw + na,
+                               db.counts(conn)["jobs"])
+                s.update(label=f"Done locally — +{nb+nw+na} new jobs", state="complete")
+        st.rerun()
+
+    if st.button("🔄 Sync from cloud now", width='stretch',
+                 help="Pull whatever the VM has found, without triggering a new scan."):
+        from sync_from_cloud import merge as cloud_merge
+        with st.status("Syncing from the cloud VM…", expanded=True) as s:
+            try:
+                cloud_merge()
+                s.update(label="Synced.", state="complete")
+            except Exception as e:
+                s.write(f"Couldn't reach the cloud VM ({e}).")
+                s.update(label="Sync failed", state="error")
         st.rerun()
     st.divider()
 

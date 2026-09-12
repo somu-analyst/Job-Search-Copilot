@@ -66,6 +66,7 @@ def main() -> int:
         print(f"  archived {n_stale} stale unreviewed jobs (> {db.STALE_DAYS} days)")
 
     after = db.counts(conn)
+    db.record_scan("local", total_new, after["jobs"])
     conn.close()
     print(f"\nDone. +{total_new} new jobs this run.")
     print(f"  Jobs in DB:      {after['jobs']}  ({after['new']} unreviewed)")
