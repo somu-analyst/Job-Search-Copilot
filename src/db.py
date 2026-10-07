@@ -8,11 +8,15 @@ Single file: data/jobs.db. Two tables:
 The frontend (app.py) reads/writes this DB. Nothing here needs an API key.
 """
 from __future__ import annotations
+import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "jobs.db"
+# JOBSCOUT_DB points every reader/writer at another file. Set it to a COPY to try
+# something against real data without touching the real book.
+DB_PATH = Path(os.environ.get("JOBSCOUT_DB")
+               or Path(__file__).resolve().parent.parent / "data" / "jobs.db")
 _DEMO_DB = Path(__file__).resolve().parent.parent / "data" / "demo_jobs.db"
 
 
@@ -33,6 +37,16 @@ STALE_DAYS = 21  # unreviewed 'new' jobs older than this are auto-archived
 
 def now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+def utc_stamp() -> str:
+    """Timestamp for anything that syncs between the laptop and the cloud VM.
+
+    Explicit UTC, one format everywhere, because the laptop's clock is New York
+    time and the VM's is UTC: a local-time stamp from one host is not comparable
+    with one from the other, and whichever side is "newer" decides who wins.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def today() -> str:
@@ -149,6 +163,15 @@ def init(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE jobs ADD COLUMN tags TEXT DEFAULT ''")
     if "apply_kind" not in cols:   # link-check verdict: exact | weak — see src/link_check.py
         conn.execute("ALTER TABLE jobs ADD COLUMN apply_kind TEXT DEFAULT ''")
+    # YOUR OWN "I applied to this" mark, deliberately separate from `status`
+    # (user 2026-10-07). status is a pipeline the app also moves on its own
+    # (archive_stale, the Applied tab's dropdown); this one is only ever set by
+    # you, so it stays true no matter what the pipeline does. applied_marked_at
+    # is UTC and is what decides the winner when laptop and cloud disagree.
+    if "applied_by_me" not in cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN applied_by_me INTEGER DEFAULT 0")
+    if "applied_marked_at" not in cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN applied_marked_at TEXT DEFAULT ''")
     ccols = {r[1] for r in conn.execute("PRAGMA table_info(companies)")}
     if "industry" not in ccols:
         conn.execute("ALTER TABLE companies ADD COLUMN industry TEXT DEFAULT ''")
@@ -195,6 +218,17 @@ def upsert_job(conn, *, url, title, company, location, source,
          today(), date_posted, desc, salary or ""),
     )
     return True
+
+
+def set_applied_by_me(conn, url: str, applied: bool) -> bool:
+    """Set (or clear) YOUR applied mark on one job. Stamps UTC so the two-way
+    cloud sync can tell which side marked it more recently. Returns True if a
+    row changed."""
+    cur = conn.execute(
+        "UPDATE jobs SET applied_by_me=?, applied_marked_at=? WHERE url=?",
+        (1 if applied else 0, utc_stamp(), url))
+    conn.commit()
+    return cur.rowcount > 0
 
 
 def backfill_salary(conn) -> int:

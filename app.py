@@ -118,7 +118,7 @@ def _post_process():
 # Order = what you decide with, left to right:
 #   is it hot -> how well does it fit -> apply -> tailor a resume -> where it
 #   stands -> what it is -> who -> what skills -> where
-JOB_COLS = ["🔥", "score", "apply_url", "link", "tailor", "status",
+JOB_COLS = ["🔥", "score", "apply_url", "link", "tailor", "applied_me", "status",
             "title", "company", "tags", "location"]
 
 # Link-quality badge, straight from the validator (src/link_check.audit_all):
@@ -208,6 +208,15 @@ def job_columns(extra: dict | None = None) -> dict:
             "📄", width="small",
             help="Tick to send this job to Resume Studio, then open that tab — "
                  "it'll already be selected."),
+        # YOUR mark, not the pipeline's. `status` is moved by the app too (stale
+        # archiving, the Applied tab), so "did I actually apply?" needed a field
+        # only you ever set (user 2026-10-07). Survives scans, and syncs both
+        # ways with the cloud dashboard.
+        "applied_me": st.column_config.CheckboxColumn(
+            "✅", width="small",
+            help="Tick once YOU have applied. It sticks through scans, shows on "
+                 "the cloud dashboard too, and is independent of Status. Use "
+                 "'Hide applied' in ⚙️ Filters to clear them out of the list."),
         "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES,
                                                    width="small"),
         # No width hints on the text columns. A fixed width is a PROMISE the
@@ -249,8 +258,17 @@ def _handle_tailor(view, edited, df) -> None:
 
 
 def _save_edits(df, edited, key_note="notes"):
-    """Persist status/notes edits; stamp date_applied when a job turns applied."""
+    """Persist status/notes/applied edits; stamp date_applied when a job turns applied."""
     n = 0
+    # Your own ✅ mark. Written through db.set_applied_by_me so it gets the UTC
+    # stamp the cloud sync compares -- never a bare UPDATE here.
+    if "applied_me" in edited.columns:
+        for i, row in edited.iterrows():
+            was = bool(df.iloc[i].get("applied_me", 0))
+            now_ = bool(row.get("applied_me", False))
+            if now_ != was:
+                db.set_applied_by_me(conn, df.iloc[i]["url"], now_)
+                n += 1
     # Notes are no longer a grid column (they're edited in the row dialog), so a
     # missing column means "unchanged", NOT "cleared". Without this guard the
     # first save would blank every note in the table.
@@ -341,7 +359,7 @@ def job_dialog(row: dict):
                 st.info("Couldn't find a better link — the pre-built Google search "
                         "in Apply is your best bet.")
 
-    a, b, c = st.columns(3)
+    a, b, c, d = st.columns(4)
     with a:
         label = "✅ Apply on employer site" if row.get("apply_kind") != "weak" \
             else "🔍 Search for this job"
@@ -349,7 +367,18 @@ def job_dialog(row: dict):
     with b:
         st.link_button("↗ Original posting", row["url"], width='stretch')
     with c:
-        if st.button("Mark applied", width='stretch', key="dlg_applied"):
+        # Your own mark (independent of the pipeline below it).
+        _marked = bool(conn.execute(
+            "SELECT COALESCE(applied_by_me, 0) FROM jobs WHERE url=?",
+            (row["url"],)).fetchone()[0])
+        if st.button("↩️ Not applied" if _marked else "✅ I applied",
+                     width='stretch', key="dlg_applied_me",
+                     help="Your own mark: survives scans and syncs to the cloud."):
+            db.set_applied_by_me(conn, row["url"], not _marked)
+            st.rerun()
+    with d:
+        if st.button("Status → applied", width='stretch', key="dlg_applied",
+                     help="Moves it to the Applied tab with today's date."):
             mark_applied(row["url"])
             st.rerun()
 
@@ -386,6 +415,10 @@ def job_board(kp: str, default_status=None, height=460):
             min_score = st.slider("Min fit", 1.0, 10.0, 1.0, 0.5, key=f"{kp}_min")
             must_only = st.checkbox(f"🔥 Must-apply only (≥ {MUST_APPLY_AT:.0f})",
                                     key=f"{kp}_must")
+            hide_applied = st.checkbox(
+                "Hide the ones I've applied to", key=f"{kp}_hide_applied",
+                help="Hides every job you ticked ✅. They stay in the list by "
+                     "default so you can still see them while scanning.")
             core_only = st.checkbox("Core-fit ★ only", key=f"{kp}_core")
             company_f = st.multiselect("Company", [r[0] for r in conn.execute(
                 "SELECT DISTINCT company FROM jobs ORDER BY company")], key=f"{kp}_co")
@@ -405,7 +438,8 @@ def job_board(kp: str, default_status=None, height=460):
                   COALESCE(jobs.apply_kind,'') AS apply_kind,
                   COALESCE(jobs.tags,'') AS tags,
                   jobs.status AS status, jobs.notes AS notes,
-                  jobs.date_applied AS date_applied
+                  jobs.date_applied AS date_applied,
+                  COALESCE(jobs.applied_by_me, 0) AS applied_me
            FROM jobs LEFT JOIN companies ON jobs.company = companies.name
            WHERE jobs.score >= ?"""
     p = [must_only and MUST_APPLY_AT or min_score]
@@ -427,6 +461,8 @@ def job_board(kp: str, default_status=None, height=460):
         q += f" AND source IN ({','.join('?'*len(source_f))})"; p += source_f
     if core_only:
         q += " AND is_core = 1"
+    if hide_applied:
+        q += " AND COALESCE(jobs.applied_by_me, 0) = 0"
     if kw:
         q += " AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ?)"; p += [f"%{kw.lower()}%"]*2
     days = AGE_OPTS[age_f]
@@ -445,21 +481,23 @@ def job_board(kp: str, default_status=None, height=460):
                  "Loosen the filters, or run a scan from the sidebar.")
         return
 
-    st.caption(f"**{len(df)} jobs** · set **Status → applied** and it moves to "
-               f"Applied with today's date. Tick **📄** to tailor a resume for a job. "
+    st.caption(f"**{len(df)} jobs** · tick **✅** once you've applied — it sticks, and "
+               f"shows on the cloud dashboard too. Set **Status → applied** to move a job "
+               f"to the Applied tab with today's date. Tick **📄** to tailor a resume. "
                f"🔥 = fit ≥ {MUST_APPLY_AT:.0f}.")
     view = df.copy()
     view["🔥"] = (df["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
     view["link"] = df["apply_kind"].map(lambda k: _LINK_BADGE.get(k, "·"))
     view["tailor"] = False
+    view["applied_me"] = df["applied_me"].astype(bool)
     view["location"] = df["location"].map(short_loc)
     view = view[JOB_COLS]
     edited = st.data_editor(
         view, hide_index=True, width='stretch', height=height,
         column_config=job_columns(),
-        # Only Status and the 📄 tick are yours to change here. Everything else is
-        # a fact about the posting, not an opinion about it.
-        disabled=[c for c in JOB_COLS if c not in ("status", "tailor")],
+        # Only Status, the 📄 tick and your ✅ applied mark are yours to change
+        # here. Everything else is a fact about the posting, not an opinion.
+        disabled=[c for c in JOB_COLS if c not in ("status", "tailor", "applied_me")],
         key=f"{kp}_editor")
     _handle_tailor(view, edited, df)
     if st.button("💾 Save changes", key=f"{kp}_save"):
@@ -661,6 +699,7 @@ t_today, t_jobs, t_applied, t_resume, t_arch, t_co, t_h1b, t_ins = st.tabs(
 with t_today:
     top = load(f"""SELECT jobs.rowid, jobs.url, jobs.title, jobs.company, jobs.location,
                           jobs.score, jobs.source, jobs.date_posted,
+                          COALESCE(jobs.applied_by_me, 0) applied_me,
                           COALESCE(jobs.salary,'') salary,
                           COALESCE(jobs.description,'') description,
                           COALESCE(NULLIF(jobs.apply_url,''), jobs.url) apply_url,
@@ -685,7 +724,7 @@ with t_today:
                     ui.job_card(r["title"], r["company"], r["location"], r["score"],
                                 industry=r["industry"], salary=r["salary"],
                                 sponsor=r["sponsor"], source=r["source"])
-                    b1, b2, b3 = st.columns(3)
+                    b1, b2, b3, b4 = st.columns(4)
                     with b1:
                         st.link_button("✅ Apply", r["apply_url"],
                                        width='stretch', type="primary")
@@ -697,6 +736,15 @@ with t_today:
                             st.session_state["step_now"] = 2
                             st.success("Queued → open **📄 Resume Studio**.")
                     with b3:
+                        # Mark it the moment you come back from the employer site.
+                        _am = bool(r.get("applied_me", 0))
+                        if st.button("✅ Done" if not _am else "✅ Marked",
+                                     key=f"am{r['rowid']}", width='stretch',
+                                     type="secondary" if not _am else "primary",
+                                     help="Tick that YOU applied — sticks and syncs"):
+                            db.set_applied_by_me(conn, r["url"], not _am)
+                            st.rerun()
+                    with b4:
                         if st.button("View", key=f"v{r['rowid']}",
                                      width='stretch'):
                             job_dialog(r.to_dict())
@@ -732,6 +780,7 @@ with t_applied:
                          COALESCE(tags,'') tags,
                          COALESCE(NULLIF(apply_url,''), url) apply_url,
                          COALESCE(apply_kind,'') apply_kind,
+                         COALESCE(applied_by_me, 0) applied_me,
                          status, notes
                   FROM jobs
                   WHERE status IN ('applied','responded','interview','offer','rejected')
@@ -747,6 +796,7 @@ with t_applied:
         va["🔥"] = (dfa["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
         va["link"] = dfa["apply_kind"].map(lambda k: _LINK_BADGE.get(k, "·"))
         va["tailor"] = False
+        va["applied_me"] = dfa["applied_me"].astype(bool)
         va["location"] = dfa["location"].map(short_loc)
         acols = JOB_COLS + ["date_applied"]
         edited = st.data_editor(
@@ -754,7 +804,7 @@ with t_applied:
             column_config=job_columns({
                 "date_applied": st.column_config.TextColumn("Applied on", width="small"),
             }),
-            disabled=[c for c in acols if c not in ("status", "tailor")],
+            disabled=[c for c in acols if c not in ("status", "tailor", "applied_me")],
             key="applied_editor")
         _handle_tailor(va[acols], edited, dfa)
         a1, a2 = st.columns([1, 4])
@@ -913,6 +963,7 @@ with t_resume:
                            COALESCE(jobs.apply_kind,'') apply_kind,
                            COALESCE(jobs.tags,'') tags,
                            COALESCE(companies.industry,'') industry, jobs.status,
+                           COALESCE(jobs.applied_by_me, 0) applied_me,
                            jobs.date_posted, jobs.date_found
                     FROM jobs LEFT JOIN companies ON jobs.company = companies.name
                     WHERE 1=1"""
@@ -977,6 +1028,7 @@ with t_resume:
             grid["🔥"] = (jp["score"] >= MUST_APPLY_AT).map({True: "🔥", False: ""})
             grid["link"] = jp["apply_kind"].map(lambda k: _LINK_BADGE.get(k, "·"))
             grid["tailor"] = False
+            grid["applied_me"] = jp["applied_me"].astype(bool)
             grid["location"] = jp["location"].map(short_loc)
             # Same column order as every other table. `tailor` is dropped: you are
             # already IN Resume Studio, so a button that sends you here is noise.

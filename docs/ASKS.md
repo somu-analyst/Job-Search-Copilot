@@ -201,3 +201,13 @@ Two bugs caught only because I checked the numbers instead of trusting them:
 **J11 update — the "search online" ask is now BUILT.** Raw scraping is blocked everywhere (DDG 202, Bing/Brave 403/429), but `ddgs` (deedy5/ddgs — found by checking git/reddit as asked) rotates backends and gets through. `src/web_search.py` runs the search, keeps only postings on the **employer's own domain or a known ATS**, validates each, and upgrades the link. An aggregator hit (jobleads/builtin) is only ever a 'candidate' — never badged exact, because a wrong ✓ is worse than an honest 🔍.
 
 Yield is honest and falls off a cliff: **33%** on the first batch (big employers), **7%** on the next (long tail of small staffing firms with no employer posting to find). 990/1,322 live jobs now have a verified exact link. The remaining 332 keep the Google-search fallback plus a **🔎 Find the exact posting** button in the job dialog — one live query, on demand, for the moment you actually want to apply.
+
+## Session — 2026-10-07
+
+| # | Ask | Status |
+|---|-----|--------|
+| J12 | A flag the USER marks to say they applied — stored, and carried between laptop and cloud | ✅ `jobs.applied_by_me` + `applied_marked_at` (UTC). Tick it in the Jobs grid, the Today queue, the **✅ Done** button on a Today card, or **✅ I applied** in the job dialog; untick anywhere incl. the Applied tab. **Deliberately separate from `status`**, which the app also moves on its own (stale archiving) — this one only you ever set, so it survives scans and status changes. ⚙️ Filters → *Hide the ones I've applied to* (off by default: they stay visible). `sync_from_cloud.py` now reconciles this ONE field **both ways** for jobs both sides already have — newer `applied_marked_at` wins, and an older cloud DB gets the columns added on first push. Verified 11/11 unit checks + a Playwright run on a DB copy (card click wrote the mark; ✅ column and filter render; 0 exceptions). |
+
+**Why a stamp, and why UTC.** The laptop's clock is New York time and the VM's is UTC, so "who marked it later" is unanswerable unless both sides write the same kind of timestamp — the exact bug that was reverting closed trades in the NYSE project the same week. `db.utc_stamp()` is the one writer.
+
+**New: `JOBSCOUT_DB`.** Points every reader/writer at another file, so the UI can be tested against a *copy* of the real data instead of the real book.
