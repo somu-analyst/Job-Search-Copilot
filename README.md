@@ -6,9 +6,11 @@
 
 **Find the right jobs, tailor an honest resume for each one, and apply on the employer's own site.**
 
-[![Try the live demo](https://img.shields.io/badge/▶_Try_the_live_demo-0CAA41?style=for-the-badge)](https://somu-job-search-copilot.streamlit.app)
+[![Try the live demo](https://img.shields.io/badge/▶_Try_the_live_demo-0CAA41?style=for-the-badge)](https://somu-analyst.github.io/Job-Search-Copilot/app/)
 [![Request access](https://img.shields.io/badge/Request_access-24292F?style=for-the-badge&logo=github)](https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml)
 [![Book a call](https://img.shields.io/badge/Book_a_call-4285F4?style=for-the-badge&logo=googlecalendar&logoColor=white)](https://calendar.app.google/ppYD1X3F3JQtjZg58)
+
+🌐 **[somu-analyst.github.io/Job-Search-Copilot](https://somu-analyst.github.io/Job-Search-Copilot/)**
 
 <sub>The live demo runs on sample data with a fictional candidate. No sign-up, and you get one free AI tailoring run.</sub>
 
@@ -116,7 +118,7 @@ role.
 
 - **[Book a call](https://calendar.app.google/ppYD1X3F3JQtjZg58)** (pick a time that suits you)
 - **[Request access or get in touch](https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml)**
-- **[Try the live demo](https://somu-job-search-copilot.streamlit.app)**
+- **[Try the live demo](https://somu-analyst.github.io/Job-Search-Copilot/app/)**
 
 ## License
 

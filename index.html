@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Search Copilot</title>
+<meta name="description" content="Find the right jobs, tailor an honest resume for each one, and apply on the employer's own site. Live demo, no sign-up.">
+<meta property="og:title" content="Job Search Copilot">
+<meta property="og:description" content="Find the right jobs, tailor an honest resume for each one, and apply on the employer's own site.">
+<meta property="og:image" content="https://somu-analyst.github.io/Job-Search-Copilot/assets/screenshots/01_today.png">
+<link rel="icon" href="assets/logo.png">
+<style>
+  :root {
+    --bg:#ffffff; --surface:#f5f8f6; --fg:#0e1a16; --muted:#55645d; --line:#dfe7e2;
+    --accent:#0caa41; --accent-fg:#ffffff; --dark:#1f2a25;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1512; --surface:#17201b; --fg:#e8efeb; --muted:#9db0a6; --line:#26332c;
+            --accent:#2ccf63; --accent-fg:#06200f; --dark:#e8efeb; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width:1040px; margin:0 auto; padding:0 16px; }
+  header { padding:56px 0 24px; text-align:center; }
+  header img.logo { width:64px; height:64px; border-radius:14px; }
+  h1 { font-size:clamp(2rem, 5vw, 3rem); line-height:1.1; margin:16px 0 8px; letter-spacing:-0.02em; }
+  .tag { font-size:clamp(1.05rem, 2.4vw, 1.25rem); color:var(--muted); max-width:680px; margin:0 auto; }
+  .ctas { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin:28px 0 8px; }
+  .btn { display:inline-block; padding:13px 22px; border-radius:10px; font-weight:650;
+         text-decoration:none; border:1px solid var(--line); color:var(--fg); background:var(--surface); }
+  .btn.primary { background:var(--accent); color:var(--accent-fg); border-color:var(--accent); }
+  .btn:hover { filter:brightness(0.96); }
+  .note { font-size:0.88rem; color:var(--muted); text-align:center; margin:4px 0 0; }
+  .hero { margin:28px 0 8px; border-radius:14px; overflow:hidden; border:1px solid var(--line);
+          box-shadow:0 10px 40px rgba(0,0,0,0.08); }
+  .hero img { display:block; width:100%; height:auto; }
+  section { padding:40px 0 8px; }
+  h2 { font-size:1.5rem; margin:0 0 16px; letter-spacing:-0.01em; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+  .stat { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .stat b { display:block; font-size:1.7rem; line-height:1.1; }
+  .stat span { color:var(--muted); font-size:0.92rem; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:20px; }
+  .card h3 { margin:0 0 6px; font-size:1.05rem; }
+  .card p { margin:0; color:var(--muted); font-size:0.95rem; }
+  .shots { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; }
+  .shots figure { margin:0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface); }
+  .shots img { display:block; width:100%; height:auto; }
+  .shots figcaption { padding:10px 14px; font-size:0.9rem; color:var(--muted); }
+  .end { text-align:center; padding:48px 0 64px; }
+  footer { border-top:1px solid var(--line); padding:20px 0 32px; color:var(--muted); font-size:0.88rem; text-align:center; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <img class="logo" src="assets/logo.png" alt="Job Search Copilot logo">
+    <h1>Job Search Copilot</h1>
+    <p class="tag">Find the right jobs, tailor an honest resume for each one, and apply on the employer's own site.</p>
+    <div class="ctas">
+      <a class="btn primary" href="app/">▶ Try the live app</a>
+      <a class="btn" href="https://calendar.app.google/ppYD1X3F3JQtjZg58">📅 Book a call</a>
+      <a class="btn" href="https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml">🔑 Request access</a>
+    </div>
+    <p class="note">Sample data with a fictional candidate · no sign-up · one free AI tailoring run.
+      If the app has been idle, it takes about 30 seconds to wake up.</p>
+  </header>
+
+  <div class="hero">
+    <img src="assets/walkthrough.gif" alt="Walkthrough: clicking through all 8 tabs of the app" width="1200" height="750">
+  </div>
+
+  <section>
+    <h2>By the numbers</h2>
+    <div class="stats">
+      <div class="stat"><b>11,000+</b><span>jobs found and scored, across 2,700+ employers</span></div>
+      <div class="stat"><b>3,900+</b><span>exact employer postings found automatically</span></div>
+      <div class="stat"><b>3</b><span>tailored resume versions per job, each checked for invented claims</span></div>
+      <div class="stat"><b>$0</b><span>to run: free AI models with a rule-based fallback</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="cards">
+      <div class="card"><h3>🔎 Finds the real posting</h3><p>Scans job boards, employers' own career sites and job-search APIs daily, then links you to the employer's posting instead of a reposter.</p></div>
+      <div class="card"><h3>🎯 Scores every job against you</h3><p>Rates fit 1–10 with keyword relevance plus meaning-based matching, so "fraud analytics" still matches "financial crime".</p></div>
+      <div class="card"><h3>📄 Tailors without inventing</h3><p>Writes three resume versions per job and traces every claim back to your real experience, flagging anything it can't support.</p></div>
+      <div class="card"><h3>🗂 Remembers what you sent</h3><p>Every application, its status, and the exact resume version you sent, so you're ready when a recruiter calls.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Screenshots</h2>
+    <div class="shots">
+      <figure><img src="assets/screenshots/01_today.png" alt="Today tab" loading="lazy"><figcaption>🎯 Today: highest-fit picks</figcaption></figure>
+      <figure><img src="assets/screenshots/04_resume_studio.png" alt="Resume Studio tab" loading="lazy"><figcaption>📄 Resume Studio: score, tailor, generate documents</figcaption></figure>
+      <figure><img src="assets/screenshots/02_jobs.png" alt="Jobs tab" loading="lazy"><figcaption>📋 Jobs: every job found, filter and sort</figcaption></figure>
+      <figure><img src="assets/screenshots/07_sponsors.png" alt="Sponsors tab" loading="lazy"><figcaption>🎫 Sponsors: H-1B sponsor priority from public data</figcaption></figure>
+    </div>
+  </section>
+
+  <div class="end">
+    <h2>Want it on your own resume, or to talk about a role?</h2>
+    <div class="ctas">
+      <a class="btn primary" href="https://calendar.app.google/ppYD1X3F3JQtjZg58">📅 Book a call</a>
+      <a class="btn" href="https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml">🔑 Request access</a>
+      <a class="btn" href="https://github.com/somu-analyst/Job-Search-Copilot">📘 Read the full write-up</a>
+    </div>
+  </div>
+
+</div>
+<footer>
+  <div class="wrap">© <a href="https://github.com/somu-analyst">somu-analyst</a>. All rights reserved. The source code is private; ask for a walkthrough.</div>
+</footer>
+</body>
+</html>
