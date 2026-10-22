@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Try the live demo
+    url: https://job-search-copilot.streamlit.app
+    about: The working app on sample data. No sign-up.

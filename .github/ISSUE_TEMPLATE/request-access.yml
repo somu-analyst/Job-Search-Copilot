@@ -1,0 +1,42 @@
+name: Request access or get in touch
+description: Ask for a code walkthrough, access to use the tool, or to talk about a role.
+title: "[Access] "
+labels: ["access-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your interest in Job Search Copilot.
+        **This request is public.** Don't post anything private here. Leave a way to
+        reach you (LinkedIn or a public profile is fine) and I'll follow up directly.
+  - type: dropdown
+    id: who
+    attributes:
+      label: I am a…
+      options:
+        - Recruiter / hiring manager
+        - Job seeker who wants to use it
+        - Engineer / potential collaborator
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: want
+    attributes:
+      label: I'd like…
+      options:
+        - label: A live walkthrough of the code and architecture
+        - label: Access to use the tool on my own resume
+        - label: To talk about a role or a project
+  - type: input
+    id: reach
+    attributes:
+      label: How should I reach you?
+      description: A LinkedIn URL or other public profile. Please don't post a phone number.
+    validations:
+      required: true
+  - type: textarea
+    id: note
+    attributes:
+      label: Anything else?
+      description: The role, what you're searching for, or what you'd like to see.
