@@ -8,6 +8,7 @@
 
 [![Try the live demo](https://img.shields.io/badge/▶_Try_the_live_demo-0CAA41?style=for-the-badge)](https://job-search-copilot.streamlit.app)
 [![Request access](https://img.shields.io/badge/Request_access-24292F?style=for-the-badge&logo=github)](https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml)
+[![Book a call](https://img.shields.io/badge/Book_a_call-4285F4?style=for-the-badge&logo=googlecalendar&logoColor=white)](https://calendar.app.google/ppYD1X3F3JQtjZg58)
 
 <sub>The live demo runs on sample data with a fictional candidate. No sign-up, and you get one free AI tailoring run.</sub>
 
@@ -113,6 +114,7 @@ Python · Streamlit · SQLite · BM25 + local sentence-embedding scoring · free
 The source code is private. I'm glad to walk through it, give access, or talk about a
 role.
 
+- **[Book a call](https://calendar.app.google/ppYD1X3F3JQtjZg58)** (pick a time that suits you)
 - **[Request access or get in touch](https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml)**
 - **[Try the live demo](https://job-search-copilot.streamlit.app)**
 
