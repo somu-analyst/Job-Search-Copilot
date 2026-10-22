@@ -22,10 +22,10 @@ it never dead-ends.
 
 ## ▶ Walkthrough video
 
-[![Watch the walkthrough](assets/screenshots/01_today.png)](assets/walkthrough.mp4)
+![Job Search Copilot walkthrough: clicking through all 8 tabs](assets/walkthrough.gif)
 
-**[▶ Play the walkthrough (MP4)](assets/walkthrough.mp4)**: clicking through all
-8 tabs against a live database of 1,395 jobs.
+Clicking through all 8 tabs against a live database of 1,395 jobs.
+([full-quality MP4](assets/walkthrough.mp4))
 
 ## Screenshots
 
