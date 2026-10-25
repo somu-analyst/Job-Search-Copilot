@@ -6,13 +6,14 @@
 
 **Find the right jobs, tailor an honest resume for each one, and apply on the employer's own site.**
 
-[![Try the live demo](https://img.shields.io/badge/▶_Try_the_live_demo-0CAA41?style=for-the-badge)](https://somu-analyst.github.io/Job-Search-Copilot/app/)
+[![Book a call](https://img.shields.io/badge/Book_a_call-0CAA41?style=for-the-badge&logo=googlecalendar&logoColor=white)](https://calendar.app.google/ppYD1X3F3JQtjZg58)
 [![Request access](https://img.shields.io/badge/Request_access-24292F?style=for-the-badge&logo=github)](https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml)
-[![Book a call](https://img.shields.io/badge/Book_a_call-4285F4?style=for-the-badge&logo=googlecalendar&logoColor=white)](https://calendar.app.google/ppYD1X3F3JQtjZg58)
+![Live demo: coming soon](https://img.shields.io/badge/Live_demo-coming_soon-lightgrey?style=for-the-badge)
 
 🌐 **[somu-analyst.github.io/Job-Search-Copilot](https://somu-analyst.github.io/Job-Search-Copilot/)**
 
-<sub>The live demo runs on sample data with a fictional candidate. No sign-up, and you get one free AI tailoring run.</sub>
+<sub>A public live demo (sample data, fictional candidate) is on the way. Until then, book a call
+for a live walkthrough.</sub>
 
 </div>
 
@@ -34,11 +35,12 @@ Job Search Copilot fixes all three, and it's been my own daily driver since July
 
 | | |
 |---|---|
-| **11,000+** jobs found and scored | across 2,700+ employers, from job boards, employers' own career sites and job-search APIs |
+| **11,700+** jobs found and scored | across 2,700+ employers, from job boards, employers' own career sites, job-search APIs and recruiter groups |
+| **700+** prime-vendor & recruiter jobs | from 180+ staffing firms, implementation partners and boutique recruiters, sortable by vendor size |
 | **3,900+** exact employer postings | resolved automatically, so you skip the reposter |
 | **3** tailored resume versions per job | each scored three ways and checked for invented claims |
 | **$0** to run | free AI models, with a rule-based fallback when they're capped |
-| **42** automated tests | run offline in under a second |
+| **100** automated tests | run offline in under a second |
 
 ## How it works
 
@@ -60,6 +62,13 @@ Job Search Copilot fixes all three, and it's been my own daily driver since July
 4. **Apply:** links you to the employer's own posting. Assisted apply fills the form;
    **you** press Submit.
 5. **Track:** every application, its status, and the exact resume you sent.
+6. **Prime vendors:** a separate view of jobs posted by staffing primes, implementation
+   partners, boutique recruiters and C2C recruiter groups, filterable by vendor size
+   (small / mid-size / large) and by the terms each posting states (W2, C2C, contract,
+   full-time, contract-to-hire). A "W2 only, no C2C" posting is never shown as C2C.
+7. **Prepare:** an AI cover letter written only from your resume and checked sentence by
+   sentence, plus per-job interview prep: likely questions with STAR answers from your
+   real experience, honest "gap" flags, and a practice box that grades your answers.
 
 ## Screenshots
 
@@ -118,7 +127,7 @@ role.
 
 - **[Book a call](https://calendar.app.google/ppYD1X3F3JQtjZg58)** (pick a time that suits you)
 - **[Request access or get in touch](https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml)**
-- **[Try the live demo](https://somu-analyst.github.io/Job-Search-Copilot/app/)**
+- **Live demo:** coming soon
 
 ## License
 
