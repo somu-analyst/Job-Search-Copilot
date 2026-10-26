@@ -19,6 +19,14 @@ for a live walkthrough.</sub>
 
 ![Job Search Copilot walkthrough: clicking through all 8 tabs](assets/walkthrough.gif)
 
+### ▶ 2-minute product tour (with narration)
+
+[![Watch the 2-minute narrated product tour](assets/demo_poster.jpg)](https://somu-analyst.github.io/Job-Search-Copilot/#tour)
+
+<sub>Narrated walkthrough on a fictional candidate's profile: daily job matching, vendor
+filters, honest resume tailoring, interview prep and multiple profiles.
+[Download the MP4](assets/demo.mp4)</sub>
+
 ## The problem
 
 Job searching at volume breaks in three places:
