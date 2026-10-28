@@ -23,7 +23,7 @@ for a live walkthrough.</sub>
 
 [![Watch the 3-minute narrated product tour](assets/demo_poster.jpg)](https://somu-analyst.github.io/Job-Search-Copilot/#tour)
 
-<sub>Narrated walkthrough on a fictional candidate's profile: daily AI job matching across job boards, career sites, staffing vendors, C2C Google Groups and your Gmail; one row per role across cities; work-authorization filters; add any job by link; fact-checked AI resume tailoring; an AI interview coach with on-camera mock interviews and recording review; applications that update from your email; and top picks on Telegram. [Download the MP4](assets/demo.mp4)</sub>
+<sub>Narrated walkthrough on a fictional candidate's profile: daily AI job matching across job boards, career sites, staffing vendors, C2C Google Groups and your Gmail; one row per role across cities; work-authorization filters; add any job by link; fact-checked AI resume tailoring; an AI interview coach with on-camera mock interviews and recording review; applications that update from your email; and top picks on Telegram. [Download the MP4](assets/demo.mp4)<br>On-camera footage in the mock-interview scene: stock video by Antoni Shkraba ([Pexels](https://www.pexels.com/video/man-talking-in-front-of-camera-8048256/)), free licence.</sub>
 
 ## The problem
 
