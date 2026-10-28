@@ -19,21 +19,11 @@ for a live walkthrough.</sub>
 
 ![Job Search Copilot walkthrough: clicking through all 8 tabs](assets/walkthrough.gif)
 
-### ▶ 2-minute product tour (with narration)
+### ▶ 3-minute product tour (with narration)
 
-[![Watch the 2-minute narrated product tour](assets/demo_poster.jpg)](https://somu-analyst.github.io/Job-Search-Copilot/#tour)
+[![Watch the 3-minute narrated product tour](assets/demo_poster.jpg)](https://somu-analyst.github.io/Job-Search-Copilot/#tour)
 
-<sub>Narrated tour on a fictional candidate's profile: AI job matching, Gmail job capture,
-AI resume tailoring that's fact-checked, an AI interview coach and multiple profiles.
-[Download the MP4](assets/demo.mp4)</sub>
-
-### ▶ How to use it, step by step (3 minutes)
-
-[![Watch the 3-minute how-to video](assets/how_to_poster.jpg)](https://somu-analyst.github.io/Job-Search-Copilot/#how-to)
-
-<sub>One job seeker's day, every feature: setup, Gmail job alerts, Today, Jobs and vendors,
-Resume Studio, AI tailoring, Resume Builder, the Applied tracker, AI interview prep and company
-insights. [Download the MP4](assets/how_to.mp4)</sub>
+<sub>Narrated walkthrough on a fictional candidate's profile: daily AI job matching across job boards, career sites, staffing vendors, C2C Google Groups and your Gmail; one row per role across cities; work-authorization filters; add any job by link; fact-checked AI resume tailoring; an AI interview coach with on-camera mock interviews and recording review; applications that update from your email; and top picks on Telegram. [Download the MP4](assets/demo.mp4)</sub>
 
 ## The problem
 
