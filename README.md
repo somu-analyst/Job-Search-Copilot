@@ -17,13 +17,11 @@ for a live walkthrough.</sub>
 
 </div>
 
-![Job Search Copilot walkthrough: clicking through all 8 tabs](assets/walkthrough.gif)
-
 ### ▶ 4-minute product tour (with narration)
 
 [![Watch the 4-minute narrated product tour](assets/demo_poster.jpg)](https://somu-analyst.github.io/Job-Search-Copilot/#tour)
 
-<sub>Narrated walkthrough on a fictional candidate's profile: daily AI job matching across job boards, career sites, staffing vendors, C2C Google Groups and your Gmail; one row per role across cities; work-authorization filters; add any job by link; fact-checked AI resume tailoring; an AI interview coach with on-camera mock interviews and recording review; applications that update from your email; and top picks on Telegram. [Download the MP4](assets/demo.mp4)<br>On-camera footage in the mock-interview scene: stock video by Antoni Shkraba ([Pexels](https://www.pexels.com/video/man-talking-in-front-of-camera-8048256/)), free licence.</sub>
+<sub>Narrated walkthrough on a fictional candidate's profile: daily AI job matching across job boards, career sites, staffing vendors, C2C Google Groups and your Gmail; one row per role across cities; work-authorization filters; add any job by link; fact-checked AI resume tailoring; an AI interview coach with on-camera mock interviews and recording review; STAR stories and the questions an interviewer will ask about your own resume; applications that update from your email; and your full job table inside Telegram. Full 1080p. [Download the MP4](assets/demo.mp4)<br>On-camera footage in the mock-interview scene: stock video by Antoni Shkraba ([Pexels](https://www.pexels.com/video/man-talking-in-front-of-camera-8048256/)), free licence.</sub>
 
 ## The problem
 
@@ -56,8 +54,9 @@ Job Search Copilot fixes all three, and it's been my own daily driver since July
   sites (direct) ───┼────► score fit 1–10  ────►│  SQLite DB   │────► today's picks
   job-search APIs ──┤      tag H-1B sponsors     │  jobs        │      resume studio
   email alerts ─────┘      find the real link    │  companies   │      tracker
-                                                 │  resumes     │
-   daily scheduled scan on a cloud VM ──────────►└──────────────┘
+  C2C Google Groups ┘                            │  resumes     │
+   daily scheduled scan on a cloud VM ──────────►└──────────────┘────► Telegram bot
+                                                                       + Mini App table
 ```
 
 1. **Find:** scans every source it can reach, daily, on an Oracle Cloud VM.
@@ -75,19 +74,39 @@ Job Search Copilot fixes all three, and it's been my own daily driver since July
 7. **Prepare:** an AI cover letter written only from your resume and checked sentence by
    sentence, plus per-job interview prep: likely questions with STAR answers from your
    real experience, honest "gap" flags, and a practice box that grades your answers.
+8. **Practise on camera:** a mock video interview that asks questions aloud, records your
+   answers, and reviews each recording for content, pace and filler words.
+9. **Track from Gmail:** reads application, interview, rejection and offer emails and
+   moves the matching job forward, with a link back to the email.
+10. **Take it with you:** a private Telegram bot sends today's picks, and its Mini App
+    opens the full job table on your phone, with filters, search and one-tap apply.
 
 ## Screenshots
 
+<sub>All screenshots use a fictional candidate (Alex Chen, Senior C++ engineer) and real public job postings.</sub>
+
 | | |
 |---|---|
-| **🎯 Today**: highest-fit picks, apply straight to the employer's own portal | **📋 Jobs**: every job found, filter/sort/status inline |
+| **🎯 Today**: highest-fit picks with fit rings, apply straight to the employer's own portal | **📋 Jobs**: every job, one row per role across cities, work-authorization filters |
 | ![Today](assets/screenshots/01_today.png) | ![Jobs](assets/screenshots/02_jobs.png) |
-| **✅ Applied**: every application, its status and when it was sent | **📄 Resume Studio**: pick a job, score fit, AI-tailor, generate docs |
+| **✅ Applied**: every application, with status changes read from your email | **📄 Resume Studio**: three tailored versions, each scored and fact-checked |
 | ![Applied](assets/screenshots/03_applied.png) | ![Resume Studio](assets/screenshots/04_resume_studio.png) |
-| **🗂 My Resumes**: every version archived, timestamped, tied to its job | **🏢 Companies**: employer directory, finds each employer's hiring system automatically |
-| ![My Resumes](assets/screenshots/05_my_resumes.png) | ![Companies](assets/screenshots/06_companies.png) |
-| **🎫 Sponsors**: H-1B sponsor priority from public disclosure data | **📊 Insights**: what the search is turning up, over time |
-| ![Sponsors](assets/screenshots/07_sponsors.png) | ![Insights](assets/screenshots/08_insights.png) |
+| **🎥 Interview coach**: on-camera mock interview with a score for every answer | **⭐ STAR stories**: your real experience, ready to tell |
+| ![Interview coach](assets/screenshots/05_interview_coach.png) | ![STAR stories](assets/screenshots/06_star_stories.png) |
+| **🔎 Questions on your resume**: what an interviewer will dig into, with a model answer | **👤 Profiles**: one job search per person, each scored against their own resume |
+| ![Questions on your resume](assets/screenshots/07_resume_questions.png) | ![Profiles](assets/screenshots/08_profiles.png) |
+
+## On your phone: Telegram
+
+A private Telegram bot sends your top picks each day. Tap **Open as table** and the Mini
+App shows the same job table as the web app: Today, All jobs and Vendors tabs,
+work-authorization and C2C filters, search, and Prev / Next pages. Each role links
+straight to the employer's apply page. Only the owner's signed Telegram session can load
+the data.
+
+| Today's picks | Filter: H-1B not ruled out | Vendors: C2C OK | Search: c++ |
+|---|---|---|---|
+| ![Telegram Mini App: today's picks](assets/telegram/today.png) | ![Telegram Mini App: H-1B filter](assets/telegram/filter.png) | ![Telegram Mini App: vendor jobs, C2C filter](assets/telegram/vendors.png) | ![Telegram Mini App: search](assets/telegram/search.png) |
 
 ## Engineering highlights
 
@@ -124,7 +143,8 @@ sample data, so nothing one person does is visible to the next.
 ## Tech stack
 
 Python · Streamlit · SQLite · BM25 + local sentence-embedding scoring · free LLMs
-(OpenRouter / Gemini) · Playwright · Oracle Cloud VM with systemd timers · pytest
+(OpenRouter / Gemini) · Gmail API · Telegram Bot API + Mini App · Playwright ·
+Oracle Cloud VM with systemd timers · pytest
 
 ## Work with me
 
