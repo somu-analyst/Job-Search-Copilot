@@ -165,3 +165,12 @@ role.
 
 © [somu-analyst](https://github.com/somu-analyst). All rights reserved. The text,
 screenshots and video in this repository may not be reproduced without permission.
+
+## 🧪 Open module: the resume fact-checker
+
+[`grounding/`](grounding/) is the real guard the copilot runs on every tailored resume, published as a standalone Python module (no dependencies, no LLM call). It splits your resume into atomic facts and grades each factual sentence the AI writes: **grounded**, **pairing** (two real facts combined, so confirm it) or **unsupported** (blocked).
+
+```bash
+python -m grounding.example    # checked 2 claims, unsupported 1, rate 50%
+python -m pytest grounding     # 2 passed
+```
