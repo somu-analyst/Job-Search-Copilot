@@ -1,0 +1,5 @@
+# The website and media are documentation for a private codebase (Python / FastAPI);
+# count them as docs so GitHub does not label this repository "HTML".
+*.html linguist-documentation
+app/** linguist-documentation
+assets/** linguist-documentation

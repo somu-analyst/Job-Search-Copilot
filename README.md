@@ -17,6 +17,12 @@ for a live walkthrough.</sub>
 
 </div>
 
+### ▶ 2-minute pitch
+
+[![Watch the 2-minute pitch](assets/pitch_poster.jpg)](assets/pitch.mp4)
+
+<sub>One job seeker's story, start to finish: real jobs from the source, honest tailoring with a fact-checking guard, an inbox that does the tracking, AI interview coaching, and the staffing-firm view. Fictional people and demo data. [Download the MP4](assets/pitch.mp4)</sub>
+
 ### ▶ 4-minute product tour (with narration)
 
 [![Watch the 4-minute narrated product tour](assets/demo_poster.jpg)](https://somu-analyst.github.io/Job-Search-Copilot/#tour)
