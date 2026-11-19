@@ -19,15 +19,15 @@ for a live walkthrough.</sub>
 
 ### ▶ 2-minute pitch
 
-[![Watch the 2-minute pitch](assets/pitch_poster.jpg)](assets/pitch.mp4)
+[![Watch the 2-minute pitch](assets/pitch_poster.jpg)](https://somu-analyst.github.io/#work)
 
-<sub>One job seeker's story, start to finish: real jobs from the source, honest tailoring with a fact-checking guard, an inbox that does the tracking, AI interview coaching, and the staffing-firm view. Fictional people and demo data. [Download the MP4](assets/pitch.mp4)</sub>
+<sub>One job seeker's story, start to finish: real jobs from the source, honest tailoring with a fact-checking guard, an inbox that does the tracking, AI interview coaching, and the staffing-firm view. Fictional people and demo data. [Play it here](https://somu-analyst.github.io/#work)</sub>
 
 ### ▶ 4-minute product tour (with narration)
 
 [![Watch the 4-minute narrated product tour](assets/demo_poster.jpg)](https://somu-analyst.github.io/Job-Search-Copilot/#tour)
 
-<sub>Narrated walkthrough on a fictional candidate's profile: daily AI job matching across job boards, career sites, staffing vendors, C2C Google Groups and your Gmail; one row per role across cities; work-authorization filters; add any job by link; fact-checked AI resume tailoring; an AI interview coach with on-camera mock interviews and recording review; STAR stories and the questions an interviewer will ask about your own resume; applications that update from your email; and your full job table inside Telegram. Full 1080p. [Download the MP4](assets/demo.mp4)<br>On-camera footage in the mock-interview scene: stock video by Antoni Shkraba ([Pexels](https://www.pexels.com/video/man-talking-in-front-of-camera-8048256/)), free licence.</sub>
+<sub>Narrated walkthrough on a fictional candidate's profile: daily AI job matching across job boards, career sites, staffing vendors, C2C Google Groups and your Gmail; one row per role across cities; work-authorization filters; add any job by link; fact-checked AI resume tailoring; an AI interview coach with on-camera mock interviews and recording review; STAR stories and the questions an interviewer will ask about your own resume; applications that update from your email; and your full job table inside Telegram. Full 1080p. [Play it here](https://somu-analyst.github.io/#work)<br>On-camera footage in the mock-interview scene: stock video by Antoni Shkraba ([Pexels](https://www.pexels.com/video/man-talking-in-front-of-camera-8048256/)), free licence.</sub>
 
 ## The problem
 
