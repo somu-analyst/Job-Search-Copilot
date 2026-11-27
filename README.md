@@ -8,11 +8,11 @@
 
 [![Book a call](https://img.shields.io/badge/Book_a_call-0CAA41?style=for-the-badge&logo=googlecalendar&logoColor=white)](https://calendar.app.google/ppYD1X3F3JQtjZg58)
 [![Request access](https://img.shields.io/badge/Request_access-24292F?style=for-the-badge&logo=github)](https://github.com/somu-analyst/Job-Search-Copilot/issues/new?template=request-access.yml)
-![Live demo: coming soon](https://img.shields.io/badge/Live_demo-coming_soon-lightgrey?style=for-the-badge)
+![Live demo: coming soon](https://img.shields.io/badge/Live_demo-try_it-brightgreen?style=for-the-badge)
 
-🌐 **[somu-analyst.github.io/Job-Search-Copilot](https://somu-analyst.github.io/Job-Search-Copilot/)**
+👉 **[Try the live demo](https://job-search-copilot-demo.onrender.com)** · 🌐 **[somu-analyst.github.io/Job-Search-Copilot](https://somu-analyst.github.io/Job-Search-Copilot/)**
 
-<sub>A public live demo (sample data, fictional candidate) is on the way. Until then, book a call
+<sub>Try the live demo above (sample data, fictional candidate). Want a walkthrough of the real app? Book a call
 for a live walkthrough.</sub>
 
 </div>
